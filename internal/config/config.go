@@ -10,7 +10,7 @@ import (
 
 type Config struct {
 	Server   ServerConfig
-	Database DatebaseConfig
+	Database DatabaseConfig
 	JWT      JWTConfig
 	Email    EmailConfig
 	App      AppConfig
@@ -21,7 +21,7 @@ type ServerConfig struct {
 	GinMode string
 }
 
-type DatebaseConfig struct {
+type DatabaseConfig struct {
 	Host      string
 	Port      string
 	User      string
