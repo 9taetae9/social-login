@@ -60,7 +60,7 @@ func (s *authService) Register(email, password string) (*RegisterResponse, error
 
 	user := &models.User{
 		Email:         email,
-		PasswordHash:  hashedPassword,
+		PasswordHash:  &hashedPassword,
 		EmailVerified: false,
 	}
 
@@ -111,8 +111,12 @@ func (s *authService) Login(email, password string) (*AuthResponse, error) {
 		return nil, errors.New("failed to find user")
 	}
 
+	if user.PasswordHash == nil{
+		return nil, errors.New("this account uses social login. please login in with social account")
+	}
+
 	// 비밀번호 검증
-	if err := utils.CheckPassword(user.PasswordHash, password); err != nil {
+	if err := utils.CheckPassword(*user.PasswordHash, password); err != nil {
 		return nil, errors.New("invalid email or password")
 	}
 
@@ -121,6 +125,51 @@ func (s *authService) Login(email, password string) (*AuthResponse, error) {
 		return nil, errors.New("email not verified. please check your email and verify your account before logging in")
 	}
 
+	return s.generateTokens(user)
+}
+
+// 소셜 로그인
+func (s *authService) SocialLogin(email, provider, socialID string) (*AuthResponse, error){
+	// 이미 소셜로 연동된 계정이 있는지 확인
+	user, err := s.userRepo.FindByProviderAndSocialID(provider, socialID)
+
+	if err == nil{
+		// [case 1] 이미 가입된 소셜 유저 -> 로그인 성공
+		return s.generateTokens(user)
+	}
+
+	// 소셜 계정이 없다면, 이메일로 기존 가입자가 있는지 확인
+	user, err = s.userRepo.FindByEmail(email)
+	if err == nil{
+		// [case 2] 기존 이메일 가입자 존재 -> 계정 통합 (Update)
+		// ** 보안 정책에 따라 비밀번호 확인을 요구할 수도 있음 (현재는 편의상 통합)
+		if err := s.userRepo.UpdateSocialInfo(user.ID, provider, socialID); err != nil{
+			return nil, errors.New("failed to link social account")
+		}
+		// 정보가 업데이트되었음으로 다시 조회하거나 객체 업데이트
+		user.Provider = provider
+		user.SocialID = socialID
+		user.EmailVerified = true
+		return s.generateTokens(user)
+	}
+
+	// [case 3] 최초 가입자 -> 회원 가입 (insert)
+	newUser := &models.User{
+		Email: email,
+		PasswordHash: nil,
+		Provider: provider,
+		SocialID: socialID,
+		EmailVerified: true,
+	}
+
+	if err := s.userRepo.Create(newUser); err != nil{
+		return nil, errors.New("failed to create social user")
+	}
+
+	return s.generateTokens(newUser)
+}
+
+func (s *authService) generateTokens(user *models.User) (*AuthResponse, error){
 	// JWT 토큰 생성
 	accessToken, err := utils.GenerateAccessToken(
 		user.ID,
@@ -261,7 +310,7 @@ func (s *authService) VerifyEmail(token string) error {
 	}
 
 	// users 테이블의 email_verified를 true로 업데이트
-	if err := s.userRepo.UpdateEmailVerified(verification.UserID); err != nil{
+	if err := s.userRepo.UpdateEmailVerified(verification.UserID); err != nil {
 		return errors.New("failed to update email verificatin status")
 	}
 
