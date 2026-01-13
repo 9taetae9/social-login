@@ -12,7 +12,8 @@ import (
 
 var DB *gorm.DB
 
-func Cooenct(cfg *config.Config) error {
+func Connect(cfg *config.Config) error {
+	// DSN (Data Source Name) 구성
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=%s&loc=%s",
 		cfg.Database.User,
 		cfg.Database.Password,
@@ -33,11 +34,13 @@ func Cooenct(cfg *config.Config) error {
 		return fmt.Errorf("failed to connect to MariaDB: %w", err)
 	}
 
+	// 연결 풀 설정
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get database instance: %w", err)
 	}
 
+	// 최대 연결 수 설정
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetMaxIdleConns(10)
 
@@ -45,10 +48,16 @@ func Cooenct(cfg *config.Config) error {
 	return nil
 }
 
+// 데이터베이스 연결 종료
 func Close() error {
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return err
 	}
 	return sqlDB.Close()
+}
+
+// 데이터베이스 인스턴스 반환
+func GetDB() *gorm.DB {
+	return DB
 }
