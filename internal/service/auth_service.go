@@ -219,7 +219,7 @@ func (s *authService) RefreshToken(refreshToken string) (*AuthResponse, error) {
 	}
 
 	// 기존 리프레시 토큰 삭제
-	if err := s.userRepo.DeleteExpiredTokens(refreshToken); err != nil {
+	if err := s.userRepo.DeleteRefreshToken(refreshToken); err != nil {
 		return nil, errors.New("failed to delete old refresh token")
 	}
 
