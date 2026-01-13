@@ -114,6 +114,32 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
+// 토큰 갱신 핸들러
+func (h *AuthHandler) RefreshToken(c *gin.Context){
+	var req RefreshTokenReqeust
+	if err := c.ShouldBindJSON(&req); err != nil{
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	// 유효성 검증
+	if err := h.validate.Struct(req); err != nil{
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	response, err := h.authService.RefreshToken(req.RefreshToken)
+	if err != nil{
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Token refresed successfully",
+		Data: response,
+	})
+}
+
 // 로그아웃 핸들러
 func (h *AuthHandler) Logout(c *gin.Context) {
 	var req LogoutRequest
