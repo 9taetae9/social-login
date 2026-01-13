@@ -14,6 +14,13 @@ type UserRepository interface {
 	FindByID(id uint) (*models.User, error)
 	UpdateEmailVerified(userId uint) error
 
+	// 소셜 로그인 관련
+	// 제공자와 식별자로 유저 조회
+	FindByProviderAndSocialID(provider, socialID string) (*models.User, error)
+
+	// 기존 계정에 소셜 정보 연동 (계정 통합)
+	UpdateSocialInfo(userID uint, provider, socialID string) error
+
 	// 이메일 인증 관련
 	CreateEmailVerification(verification *models.EmailVerification) error
 	FindEmailVerificationByToken(token string) (*models.EmailVerification, error)
@@ -54,6 +61,26 @@ func (r *userRepository) FindByID(id uint) (*models.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// 소셜 제공자와 식별자로 유저 조회
+func (r *userRepository) FindByProviderAndSocialID(provider, socialID string) (*models.User, error){
+	var user models.User
+	err := r.db.Where("provider = ? AND social_id = ?", provider, socialID).First(&user).Error
+	if err != nil{
+		return nil, err
+	}
+	return &user, nil
+}
+
+// 기존 유저에게 소셜 정보 업데이트(계정 통합용)
+func (r *userRepository) UpdateSocialInfo(userID uint, provider, socialID string) error{
+	updates := map[string]interface{}{
+		"provider": provider,
+		"social_id": socialID,
+		"email_verified": true,
+	}
+	return r.db.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error
 }
 
 func (r *userRepository) UpdateEmailVerified(userID uint) error {
