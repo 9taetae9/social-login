@@ -176,3 +176,156 @@ func (s *authService) Login(email, password string) (*AuthResponse, error) {
 		User:         user,
 	}, nil
 }
+
+// RefreshToken 갱신
+func (s *authService) RefreshToken(refreshToken string) (*AuthResponse, error) {
+	claims, err := utils.ValidateToken(refreshToken, s.cfg.JWT.Secret)
+	if err != nil {
+		return nil, errors.New("invalid refresh token")
+	}
+
+	_, err = s.userRepo.FindRefreshTokenByToken(refreshToken)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("refresh token not found")
+		}
+		return nil, errors.New("failed to find refresh token")
+	}
+
+	user, err := s.userRepo.FindByID(claims.UserID)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	newAccessToken, err := utils.GenerateAccessToken(
+		user.ID,
+		user.Email,
+		s.cfg.JWT.Secret,
+		s.cfg.JWT.AccessTokenExpiry,
+	)
+	if err != nil {
+		return nil, errors.New("failed to generate access token")
+	}
+
+	// 새로운 리프레시 토큰 생성
+	newRefreshToken, err := utils.GenerateAccessToken(
+		user.ID,
+		user.Email,
+		s.cfg.JWT.Secret,
+		s.cfg.JWT.AccessTokenExpiry,
+	)
+	if err != nil {
+		return nil, errors.New("failed to generate refresh token")
+	}
+
+	// 기존 리프레시 토큰 삭제
+	if err := s.userRepo.DeleteExpiredTokens(refreshToken); err != nil {
+		return nil, errors.New("failed to delete old refresh token")
+	}
+
+	// 새 리프레시 토큰 저장
+	newTokenModel := &models.RefreshToken{
+		UserID:    user.ID,
+		Token:     newRefreshToken,
+		ExpiresAt: time.Now().Add(s.cfg.JWT.AccessTokenExpiry),
+	}
+
+	if err := s.userRepo.CreateRefreshToken(newTokenModel); err != nil {
+		return nil, errors.New("failed to save refresh token")
+	}
+
+	return &AuthResponse{
+		AccessToken:  newAccessToken,
+		RefreshToken: newRefreshToken,
+		User:         user,
+	}, nil
+}
+
+// 로그아웃
+func (s *authService) Logout(refreshToken string) error {
+	// 리프레시 토큰 검증
+	_, err := utils.ValidateToken(refreshToken, s.cfg.JWT.Secret)
+	if err != nil {
+		return errors.New("invalid refresh token")
+	}
+
+	// 리프레시 토큰 삭제
+	if err := s.userRepo.DeleteRefreshToken(refreshToken); err != nil {
+		return errors.New("failed to delete refresh token")
+	}
+
+	return nil
+}
+
+// 이메일 인증
+func (s *authService) VerifyEmail(token string) error {
+	// 이메일 인증 토큰 조회
+	verification, err := s.userRepo.FindEmailVerificationByToken(token)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("invalid or expire verification token")
+		}
+		return errors.New("failed to find verification token")
+	}
+
+	// 토큰 만료 확인
+	if time.Now().After(verification.ExpiresAt) {
+		return errors.New("verification token has expired")
+	}
+
+	// 이미 인증된 토큰인지 확인
+	if verification.Verified {
+		return errors.New("email already verified")
+	}
+
+	// 인증 토큰을 인증됨으로 표시
+	if err := s.userRepo.MarkEmailVerificationAsUsed(verification.ID); err != nil {
+		return errors.New("failed to mark verification as used")
+	}
+
+	return nil
+}
+
+// 인증 이메일 재발송
+func (s *authService) ResendVerificationEmail(email string) error {
+	// 사용자 조회
+	user, err := s.userRepo.FindByEmail(email)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("user not found")
+		}
+		return errors.New("failed to find user")
+	}
+
+	// 이미 인증된 사용자인지 확인
+	if user.EmailVerified {
+		return errors.New("email already verified")
+	}
+
+	// 새로운 인증 토큰 생성
+	verificationToken := uuid.New().String()
+	emailVerification := &models.EmailVerification{
+		UserID:    user.ID,
+		Token:     verificationToken,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+		Verified:  false,
+	}
+
+	if err := s.userRepo.CreateEmailVerification(emailVerification); err != nil {
+		return errors.New("failed to create email verification")
+	}
+
+	emailCfg := utils.EmailConfig{
+		SMTPHost:     s.cfg.Email.SMTPHost,
+		SMTPPort:     s.cfg.Email.SMTPPort,
+		SMTPUsername: s.cfg.Email.SMTPUsername,
+		SMTPPassword: s.cfg.Email.SMTPPassword,
+		FromEmail:    s.cfg.Email.FromEmail,
+	}
+
+	if err := utils.SendVerificationEmail(user.Email, verificationToken, s.cfg.App.URL, emailCfg); err != nil {
+		return errors.New("failed to send verification email")
+	}
+
+	return nil
+}
