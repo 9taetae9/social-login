@@ -16,6 +16,7 @@ import (
 type AuthService interface {
 	Register(email, password string) (*AuthResponse, error)
 	Login(email, password string) (*AuthResponse, error)
+	RefreshToken(refreshToken string) (*AuthResponse, error)
 	Logout(refreshToken string) error
 	VerifyEmail(token string) error
 	ResendVerificationEmail(email string) error
