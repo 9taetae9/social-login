@@ -16,6 +16,7 @@ import (
 type AuthService interface {
 	Register(email, password string) (*AuthResponse, error)
 	Login(email, password string) (*AuthResponse, error)
+	Logout(refreshToken string) error
 }
 
 type authService struct {
