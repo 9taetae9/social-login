@@ -13,8 +13,13 @@ import (
 	"gorm.io/gorm"
 )
 
+type RegisterResponse struct {
+	Message string       `json:"message"`
+	User    *models.User `json:"user"`
+}
+
 type AuthService interface {
-	Register(email, password string) (*AuthResponse, error)
+	Register(email, password string) (*RegisterResponse, error)
 	Login(email, password string) (*AuthResponse, error)
 	RefreshToken(refreshToken string) (*AuthResponse, error)
 	Logout(refreshToken string) error
@@ -41,7 +46,7 @@ func NewAuthService(userRepo repository.UserRepository, cfg *config.Config) Auth
 }
 
 // 회원가입
-func (s *authService) Register(email, password string) (*AuthResponse, error) {
+func (s *authService) Register(email, password string) (*RegisterResponse, error) {
 	// 이메일 중복 확인
 	existingUser, err := s.userRepo.FindByEmail(email)
 	if err == nil && existingUser != nil {
@@ -89,41 +94,9 @@ func (s *authService) Register(email, password string) (*AuthResponse, error) {
 		log.Printf("Failed to send verification email: %v", err)
 	}
 
-	// JWT 토큰 생성
-	accessToken, err := utils.GenerateAccessToken(
-		user.ID,
-		user.Email,
-		s.cfg.JWT.Secret,
-		s.cfg.JWT.AccessTokenExpiry,
-	)
-	if err != nil {
-		return nil, errors.New("failed to generate access token")
-	}
-
-	refreshToken, err := utils.GenerateAccessToken(
-		user.ID,
-		user.Email,
-		s.cfg.JWT.Secret,
-		s.cfg.JWT.RefreshTokenExpiry,
-	)
-	if err != nil {
-		return nil, errors.New("failed to generate refresh token")
-	}
-
-	// 리프레시 토큰 저장
-	refreshTokenModel := &models.RefreshToken{
-		UserID:    user.ID,
-		Token:     refreshToken,
-		ExpiresAt: time.Now().Add(s.cfg.JWT.RefreshTokenExpiry),
-	}
-	if err := s.userRepo.CreateRefreshToken(refreshTokenModel); err != nil {
-		return nil, errors.New("failed to save refresh token")
-	}
-
-	return &AuthResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		User:         user,
+	return &RegisterResponse{
+		Message: "Registration successful. Please check your email to verify your account before logging in.",
+		User:    user,
 	}, nil
 }
 
@@ -144,7 +117,7 @@ func (s *authService) Login(email, password string) (*AuthResponse, error) {
 	}
 
 	// 이메일 인증 확인
-	if !user.EmailVerified{
+	if !user.EmailVerified {
 		return nil, errors.New("email not verified. please check your email and verify your account before logging in")
 	}
 
@@ -285,6 +258,11 @@ func (s *authService) VerifyEmail(token string) error {
 	// 이미 인증된 토큰인지 확인
 	if verification.Verified {
 		return errors.New("email already verified")
+	}
+
+	// users 테이블의 email_verified를 true로 업데이트
+	if err := s.userRepo.UpdateEmailVerified(verification.UserID); err != nil{
+		return errors.New("failed to update email verificatin status")
 	}
 
 	// 인증 토큰을 인증됨으로 표시

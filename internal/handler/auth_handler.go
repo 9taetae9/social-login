@@ -81,10 +81,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, SuccessResponse{
-		Message: "User registered successfully. Please check your email for verification.",
-		Data:    response,
-	})
+	// RegisterResponse 그대로 반환
+	c.JSON(http.StatusCreated, response)
 }
 
 // 로그인 핸들러
