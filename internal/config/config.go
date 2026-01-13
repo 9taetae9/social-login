@@ -13,6 +13,7 @@ type Config struct {
 	Database DatabaseConfig
 	JWT      JWTConfig
 	Email    EmailConfig
+	Oauth	 OAuthConfig
 	App      AppConfig
 }
 
@@ -44,6 +45,12 @@ type EmailConfig struct {
 	SMTPUsername string
 	SMTPPassword string
 	FromEmail    string
+}
+
+type OAuthConfig struct{
+	GoogleClientID string
+	GoogleClientSecret string
+	GoogleRedirectURL string
 }
 
 type AppConfig struct {
@@ -86,6 +93,11 @@ func Load() *Config {
 			SMTPUsername: getEnv("SMTP_USERNAME", ""),
 			SMTPPassword: getEnv("SMTP_PASSWORD", ""),
 			FromEmail:    getEnv("EMAIL_FROM", "noreply@yourapp.com"),
+		},
+		Oauth: OAuthConfig{
+			GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
+			GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
+			GoogleRedirectURL: getEnv("GOOGLE_REDIRECT_URL", "http://localhost:8080/api/v1/auth/google/callback"),
 		},
 		App: AppConfig{
 			URL:         getEnv("APP_URL", "http://localhost:8080"),
