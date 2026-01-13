@@ -143,6 +143,11 @@ func (s *authService) Login(email, password string) (*AuthResponse, error) {
 		return nil, errors.New("invalid email or password")
 	}
 
+	// 이메일 인증 확인
+	if !user.EmailVerified{
+		return nil, errors.New("email not verified. please check your email and verify your account before logging in")
+	}
+
 	// JWT 토큰 생성
 	accessToken, err := utils.GenerateAccessToken(
 		user.ID,
