@@ -125,6 +125,16 @@
             box-shadow: 0 5px 15px rgba(219, 68, 55, 0.4);
         }
 
+        /* 네이버 로그인 버튼 전용 스타일 */
+        .btn-naver {
+            background: #03C75A; /* Naver Green */
+            margin-top: 10px;
+        }
+        .btn-naver:hover {
+            background: #02b350;
+            box-shadow: 0 5px 15px rgba(3, 199, 90, 0.4);
+        }
+
         .btn-secondary {
             background: #6c757d;
         }
@@ -233,7 +243,7 @@
             <h3>📌 사용 방법</h3>
             <p>
                 1. <strong>일반 로그인:</strong> 회원가입 -> 이메일 인증 -> 로그인<br>
-                2. <strong>소셜 로그인:</strong> 구글 로그인 버튼 클릭 -> 새 창에서 로그인 -> <strong>결과 JSON 복사</strong> -> '소셜 결과 파싱'에 붙여넣기<br>
+                2. <strong>소셜 로그인:</strong> 구글/네이버 로그인 버튼 클릭 -> 새 창에서 로그인 -> <strong>결과 JSON 복사</strong> -> '소셜 결과 파싱'에 붙여넣기<br>
                 3. 로그인이 완료되면 토큰이 자동으로 저장되어 '보호된 라우트' 테스트가 가능합니다.
             </p>
         </div>
@@ -268,9 +278,9 @@
                 <a href="http://localhost:8080/api/v1/auth/google/login" target="_blank" style="text-decoration: none;">
                     <button class="btn-google">Google로 로그인 (새 창)</button>
                 </a>
-                
+
                 <div class="divider"></div>
-                
+
                 <h3>📋 소셜 결과 파싱</h3>
                 <p style="font-size: 0.8em; color: #888; margin-bottom: 10px;">
                     새 창에 뜬 JSON 전체를 복사해서 아래에 붙여넣으세요.
@@ -279,6 +289,22 @@
                     <textarea id="socialJsonInput" placeholder='{"message": "Google login successful", "data": { ... }}'></textarea>
                 </div>
                 <button class="btn-secondary" onclick="parseSocialLogin()">토큰 적용하기</button>
+            </div>
+
+            <div class="card">
+                <h2>🟢 Naver 소셜 로그인</h2>
+                <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
+                    버튼을 누르면 네이버 로그인 페이지가 <strong>새 창</strong>으로 열립니다.
+                </p>
+                <a href="http://localhost:8080/api/v1/auth/naver/login" target="_blank" style="text-decoration: none;">
+                    <button class="btn-naver">Naver로 로그인 (새 창)</button>
+                </a>
+
+                <div class="divider"></div>
+
+                <p style="font-size: 0.8em; color: #888; margin-bottom: 10px;">
+                    네이버 로그인 결과도 위의 '소셜 결과 파싱' 텍스트박스에 붙여넣으면 됩니다.
+                </p>
             </div>
 
             <div class="card">
