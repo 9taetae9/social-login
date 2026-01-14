@@ -28,7 +28,7 @@ func main() {
 	// 의존성 주입
 	userRepo := repository.NewUserRepository(database.GetDB())
 	authService := service.NewAuthService(userRepo, cfg)
-	authHandler := handler.NewAuthHandler(authService)
+	authHandler := handler.NewAuthHandler(authService, cfg)
 
 	// Gin 라우터 설정
 	router := gin.Default()
@@ -61,6 +61,10 @@ func main() {
 
 			// 인증 필요 엔드포인트
 			auth.POST("/logout", authHandler.Logout)
+
+			// 소셜 로그인 엔드포인트
+			auth.GET("/google/login", authHandler.GoogleLogin)
+			auth.GET("/google/callback", authHandler.GoogleCallback)
 		}
 
 		protected := v1.Group("/protected")
