@@ -34,3 +34,33 @@ CREATE TABLE refresh_tokens (
     INDEX idx_refresh_tokens_token (token),
     INDEX idx_refresh_tokens_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE users 
+ADD COLUMN provider VARCHAR(20) NOT NULL DEFAULT 'email' AFTER email,
+ADD COLUMN social_id VARCHAR(255) NULL AFTER provider,
+MODIFY COLUMN password_hash VARCHAR(255) NULL;
+
+-- 복합 인덱스 생성 (동일 제공자 내 중복 ID 방지)
+-- ex: 구글에서 ID(12345)가 두 번 가입되는 것을 막음
+CREATE UNIQUE INDEX idx_users_provider_social_id ON users(provider, social_id);
+
+CREATE TABLE social_accounts (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+	user_id INT NOT NULL,
+	provider VARCHAR(20) NOT NULL, -- 'google', 'kakako', 'naver'
+	social_id VARCHAR(255) NOT NULL, -- 소셜 플랫폼의 고유 식별자 (sub)
+	email VARCHAR(255), -- 소셜 계정의 이메일 (users의 대표 이메일과 다를 수 있음)
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	
+	-- 유저 삭제 시 소셜 연동 정보도 삭제
+	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+	
+	-- 인덱스: 특정 제공자 내에서 식별자는 유일해야 함
+	UNIQUE INDEX idx_provider_social_id (provider, social_id),
+	auth_serviceauth_service-- 인덱스: 한 유저가 같은 제공자를 중복 연동할 수 없음
+	UNIQUE INDEX idx_user_provider (user_id, provider)
+) ENGINE=INNODB DEFAULT CHARSET=UTF8MB4 COLLATE=UTF8MB4_UNICODE_CI;
+
+ALTER TABLE users
+DROP COLUMN provider,
+DROP COLUMN social_id;
