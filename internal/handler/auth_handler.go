@@ -79,6 +79,17 @@ type GoogleUserInfo struct {
 	Picture       string `json:"picture"`
 }
 
+// 네이버 유저 정보 파싱용 구조체
+type NaverUserInfo struct {
+	ResultCode string `json:"resultcode"`
+	Message    string `json:"message"`
+	Response   struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	} `json:"response"`
+}
+
 // 회원가입 핸들러
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
@@ -236,6 +247,125 @@ func (h *AuthHandler) GoogleCallback(c *gin.Context){
 	})
 }
 
+// Naver 로그인 페이지로 리다이렉트
+func (h *AuthHandler) NaverLogin(c *gin.Context) {
+	// 네이버 OAuth2 Endpoint 정의
+	naverEndpoint := oauth2.Endpoint{
+		AuthURL:  "https://nid.naver.com/oauth2.0/authorize",
+		TokenURL: "https://nid.naver.com/oauth2.0/token",
+	}
+
+	naverOauthConfig := &oauth2.Config{
+		ClientID:     h.cfg.Oauth.NaverClientID,
+		ClientSecret: h.cfg.Oauth.NaverClientSecret,
+		RedirectURL:  h.cfg.Oauth.NaverRedirectURL,
+		Endpoint:     naverEndpoint,
+	}
+
+	// CSRF 방지용 랜덤 State 값 생성
+	state, err := generateRandomState()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to generate state"})
+		return
+	}
+
+	// State를 쿠키에 저장 (CSRF 공격 방지)
+	c.SetCookie(
+		"oauth_state",
+		state,
+		300,
+		"/",
+		"",
+		false,
+		true,
+	)
+
+	// 네이버 로그인 URL 생성
+	url := naverOauthConfig.AuthCodeURL(state)
+
+	// 사용자를 네이버로 리다이렉트
+	c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+// Naver 콜백 처리
+func (h *AuthHandler) NaverCallback(c *gin.Context) {
+	// State 파라미터 검증 (CSRF 방지)
+	state := c.Query("state")
+	savedState, err := c.Cookie("oauth_state")
+	if err != nil || state == "" || state != savedState {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid state parameter"})
+		return
+	}
+
+	// State 쿠키 삭제 (일회용)
+	c.SetCookie("oauth_state", "", -1, "/", "", false, true)
+
+	// 네이버에서 보내준 code 받기
+	code := c.Query("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Authorization code not found"})
+		return
+	}
+
+	// 네이버 OAuth2 Endpoint 정의
+	naverEndpoint := oauth2.Endpoint{
+		AuthURL:  "https://nid.naver.com/oauth2.0/authorize",
+		TokenURL: "https://nid.naver.com/oauth2.0/token",
+	}
+
+	naverOauthConfig := &oauth2.Config{
+		ClientID:     h.cfg.Oauth.NaverClientID,
+		ClientSecret: h.cfg.Oauth.NaverClientSecret,
+		RedirectURL:  h.cfg.Oauth.NaverRedirectURL,
+		Endpoint:     naverEndpoint,
+	}
+
+	// Code -> Naver Token 교환
+	token, err := naverOauthConfig.Exchange(context.Background(), code)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to exchange code for token"})
+		return
+	}
+
+	// Naver Token으로 유저 정보 조회
+	client := naverOauthConfig.Client(context.Background(), token)
+	resp, err := client.Get("https://openapi.naver.com/v1/nid/me")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get user info from Naver"})
+		return
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to read response body"})
+		return
+	}
+
+	var naverUser NaverUserInfo
+	if err := json.Unmarshal(data, &naverUser); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse user info"})
+		return
+	}
+
+	// 네이버 API 응답 성공 여부 확인
+	if naverUser.ResultCode != "00" {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get user info from Naver"})
+		return
+	}
+
+	// Service 계층의 SocialLogin 호출
+	authResponse, err := h.authService.SocialLogin(naverUser.Response.Email, "naver", naverUser.Response.ID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Naver login successful",
+		Data:    authResponse,
+	})
+}
 
 // 토큰 갱신 핸들러
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
