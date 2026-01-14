@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -139,8 +141,23 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context){
 		Endpoint: google.Endpoint,
 	}
 
-	//CSRF 방지용 State 값 (실무에서는 랜덤 문자열 생성)
-	state := "random-state-string"
+	// CSRF 방지용 랜덤 State 값 생성
+	state, err := generateRandomState()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to generate state"})
+		return
+	}
+
+	// State를 쿠키에 저장 (CSRF 공격 방지)
+	c.SetCookie(
+		"oauth_state",           // name
+		state,                   // value
+		300,                     // maxAge (5분)
+		"/",                     // path
+		"",                      // domain
+		false,                   // secure (production에서는 true)
+		true,                    // httpOnly
+	)
 
 	// 구글 로그인 URL 생성
 	url := googleOauthConfig.AuthCodeURL(state)
@@ -151,6 +168,17 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context){
 
 // Google 콜백 처리
 func (h *AuthHandler) GoogleCallback(c *gin.Context){
+	// State 파라미터 검증 (CSRF 방지)
+	state := c.Query("state")
+	savedState, err := c.Cookie("oauth_state")
+	if err != nil || state == "" || state != savedState {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid state parameter"})
+		return
+	}
+
+	// State 쿠키 삭제 (일회용)
+	c.SetCookie("oauth_state", "", -1, "/", "", false, true)
+
 	// 구글에서 보내준 code 받기
 	code := c.Query("code")
 	if code == ""{
@@ -301,4 +329,14 @@ func (h *AuthHandler) ResendVerificationEmail(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{
 		Message: "Verification email sent successfully",
 	})
+}
+
+// generateRandomState CSRF 방지용 랜덤 state 생성
+func generateRandomState() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
 }
