@@ -32,6 +32,9 @@ type UserRepository interface {
 	FindRefreshTokenByToken(token string) (*models.RefreshToken, error)
 	DeleteRefreshToken(token string) error
 	DeleteExpiredTokens() error
+
+	// 트랜잭션 헬퍼 메서드 - 트랜잭션이 적용된 Repo를 인자로 넘겨줌
+	WithTrx(fn func(txRepo UserRepository) error) error
 }
 
 type userRepository struct {
@@ -142,4 +145,14 @@ func (r *userRepository) DeleteExpiredTokens() error {
 
 	// 만료된 이메일 인증 토큰 삭제
 	return r.db.Where("expires_at < ?", time.Now()).Delete(&models.EmailVerification{}).Error
+}
+
+func (r *userRepository) WithTrx(fn func(txRepo UserRepository) error) error{
+	// GORM Transaction 시작
+	return r.db.Transaction(func(tx *gorm.DB) error{
+		// 트랜잭션이 시작된 DB 객체(tx)를 가진 새로운 Repository 생성
+		txRepo := NewUserRepository(tx)
+		// 비지니스 로직 실행 (여기서 에러 반환 시 자동 Rollback)
+		return fn(txRepo)
+	})
 }
