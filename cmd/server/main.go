@@ -55,7 +55,7 @@ func main() {
 			// 인증 불필요 엔드포인트
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/login", authHandler.Login)
-			auth.POST("/refrest", authHandler.RefreshToken)
+			auth.POST("/refresh", authHandler.RefreshToken)
 			auth.GET("/verify/:token", authHandler.VerifyEmail)
 			auth.POST("/resend-verify", authHandler.ResendVerificationEmail)
 
