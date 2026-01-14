@@ -65,6 +65,8 @@ func main() {
 			// 소셜 로그인 엔드포인트
 			auth.GET("/google/login", authHandler.GoogleLogin)
 			auth.GET("/google/callback", authHandler.GoogleCallback)
+			auth.GET("/naver/login", authHandler.NaverLogin)
+			auth.GET("/naver/callback", authHandler.NaverCallback)
 		}
 
 		protected := v1.Group("/protected")
