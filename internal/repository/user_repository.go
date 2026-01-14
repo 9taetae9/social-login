@@ -16,7 +16,8 @@ type UserRepository interface {
 
 	// 소셜 로그인 관련
 	// 제공자와 식별자로 유저 조회
-	FindByProviderAndSocialID(provider, socialID string) (*models.User, error)
+	FindSocialAccount(provider, socialID string) (*models.SocialAccount, error)
+	CreateSocialAccount(socialAccount *models.SocialAccount) error
 
 	// 기존 계정에 소셜 정보 연동 (계정 통합)
 	UpdateSocialInfo(userID uint, provider, socialID string) error
@@ -63,14 +64,20 @@ func (r *userRepository) FindByID(id uint) (*models.User, error) {
 	return &user, nil
 }
 
-// 소셜 제공자와 식별자로 유저 조회
-func (r *userRepository) FindByProviderAndSocialID(provider, socialID string) (*models.User, error){
-	var user models.User
-	err := r.db.Where("provider = ? AND social_id = ?", provider, socialID).First(&user).Error
+//소셜 계정 조회
+func (r *userRepository) FindSocialAccount(provider, socialID string) (*models.SocialAccount, error){
+	var socialAccount models.SocialAccount
+	// social_accounts 테이블에서 조회
+	err := r.db.Where("provider = ? AND social_id = ?", provider, socialID).First(&socialAccount).Error
 	if err != nil{
 		return nil, err
 	}
-	return &user, nil
+	return &socialAccount, nil
+}
+
+// 소셜 계정 생성 (연동)
+func (r *userRepository) CreateSocialAccount(socialAccount *models.SocialAccount) error{
+	return r.db.Create(socialAccount).Error
 }
 
 // 기존 유저에게 소셜 정보 업데이트(계정 통합용)

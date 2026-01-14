@@ -132,34 +132,52 @@ func (s *authService) Login(email, password string) (*AuthResponse, error) {
 // 소셜 로그인
 func (s *authService) SocialLogin(email, provider, socialID string) (*AuthResponse, error){
 	// 이미 소셜로 연동된 계정이 있는지 확인
-	user, err := s.userRepo.FindByProviderAndSocialID(provider, socialID)
+	socialAccount, err := s.userRepo.FindSocialAccount(provider, socialID)
 
 	if err == nil{
 		// [case 1] 이미 가입된 소셜 유저 -> 로그인 성공
+		//GORM Preload를 사용 안했으면 별도 조회 필요
+		user, err := s.userRepo.FindByID(socialAccount.UserID)
+		if err != nil{
+			return nil, errors.New("linked user not found")
+		}
 		return s.generateTokens(user)
 	}
 
 	// 소셜 계정이 없다면, 이메일로 기존 가입자가 있는지 확인
-	user, err = s.userRepo.FindByEmail(email)
+	user, err := s.userRepo.FindByEmail(email)
 	if err == nil{
 		// [case 2] 기존 이메일 가입자 존재 -> 계정 통합 (Update)
 		// ** 보안 정책에 따라 비밀번호 확인을 요구할 수도 있음 (현재는 편의상 통합)
-		if err := s.userRepo.UpdateSocialInfo(user.ID, provider, socialID); err != nil{
+		newSocialAccount := &models.SocialAccount{
+			UserID: user.ID,
+			Provider: provider,
+			SocialID: socialID,
+			Email: email,
+		}
+
+		if err := s.userRepo.CreateSocialAccount(newSocialAccount); err != nil{
 			return nil, errors.New("failed to link social account")
 		}
+
+		// if err := s.userRepo.UpdateSocialInfo(user.ID, provider, socialID); err != nil{
+		// 	return nil, errors.New("failed to link social account")
+		// }
 		// 정보가 업데이트되었음으로 다시 조회하거나 객체 업데이트
-		user.Provider = provider
-		user.SocialID = socialID
-		user.EmailVerified = true
+		if !user.EmailVerified{
+			_ = s.userRepo.UpdateEmailVerified(user.ID)
+			user.EmailVerified = true
+		}
+
 		return s.generateTokens(user)
 	}
 
-	// [case 3] 최초 가입자 -> 회원 가입 (insert)
+	// [case 3] 최초 가입자 -> User 생성 + SocialAccount 생성
+	// 트랜잭션 처리 구간
+	// 3-1. User 본체 생성
 	newUser := &models.User{
 		Email: email,
 		PasswordHash: nil,
-		Provider: provider,
-		SocialID: socialID,
 		EmailVerified: true,
 	}
 
@@ -167,6 +185,19 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 		return nil, errors.New("failed to create social user")
 	}
 
+	// 3-2. SocialAccount 연결 생성
+	newSocialAccount := &models.SocialAccount{
+		UserID: newUser.ID,
+		Provider: provider,
+		SocialID: socialID,
+		Email: email,
+	}
+
+	if err := s.userRepo.CreateSocialAccount(newSocialAccount); err != nil{
+		//TODO: 롤백 로직이 없으므로 Transaction 사용 권장
+		return nil, errors.New("failed to create social account linkage")
+	}
+	
 	return s.generateTokens(newUser)
 }
 
