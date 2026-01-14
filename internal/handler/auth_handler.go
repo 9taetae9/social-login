@@ -230,7 +230,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, SuccessResponse{
-		Message: "Token refresed successfully",
+		Message: "Token refreshed successfully",
 		Data:    response,
 	})
 }

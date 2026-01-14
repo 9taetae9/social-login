@@ -66,7 +66,7 @@ func (s *authService) Register(email, password string) (*RegisterResponse, error
 	}
 
 	if err := s.userRepo.Create(user); err != nil {
-		return nil, errors.New("failed to creater user")
+		return nil, errors.New("failed to create user")
 	}
 
 	verificationToken := uuid.New().String()
@@ -352,7 +352,7 @@ func (s *authService) VerifyEmail(token string) error {
 
 	// users 테이블의 email_verified를 true로 업데이트
 	if err := s.userRepo.UpdateEmailVerified(verification.UserID); err != nil {
-		return errors.New("failed to update email verificatin status")
+		return errors.New("failed to update email verification status")
 	}
 
 	// 인증 토큰을 인증됨으로 표시
