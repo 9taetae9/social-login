@@ -284,7 +284,7 @@ func (s *authService) RefreshToken(refreshToken string) (*AuthResponse, error) {
 		user.ID,
 		user.Email,
 		s.cfg.JWT.Secret,
-		s.cfg.JWT.AccessTokenExpiry,
+		s.cfg.JWT.RefreshTokenExpiry,
 	)
 	if err != nil {
 		return nil, errors.New("failed to generate refresh token")
@@ -299,7 +299,7 @@ func (s *authService) RefreshToken(refreshToken string) (*AuthResponse, error) {
 	newTokenModel := &models.RefreshToken{
 		UserID:    user.ID,
 		Token:     newRefreshToken,
-		ExpiresAt: time.Now().Add(s.cfg.JWT.AccessTokenExpiry),
+		ExpiresAt: time.Now().Add(s.cfg.JWT.RefreshTokenExpiry),
 	}
 
 	if err := s.userRepo.CreateRefreshToken(newTokenModel); err != nil {
