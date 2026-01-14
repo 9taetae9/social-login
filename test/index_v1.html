@@ -1,9 +1,11 @@
+<!-- 프로젝트 경로: /test/index.html -->
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auth Service API 통합 테스트</title>
+    <title>Auth Service API 테스트</title>
     <style>
         * {
             margin: 0;
@@ -115,24 +117,6 @@
             transform: translateY(0);
         }
 
-        /* 구글 로그인 버튼 전용 스타일 */
-        .btn-google {
-            background: #DB4437; /* Google Red */
-            margin-top: 10px;
-        }
-        .btn-google:hover {
-            background: #c53929;
-            box-shadow: 0 5px 15px rgba(219, 68, 55, 0.4);
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-        }
-        .btn-secondary:hover {
-            background: #5a6268;
-            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.4);
-        }
-
         .response {
             background: white;
             border-radius: 12px;
@@ -160,16 +144,15 @@
         }
 
         .token-display {
-            background: #fff3cd; /* 노란색 배경으로 강조 */
+            background: #f8f9fa;
             padding: 15px;
             border-radius: 8px;
             margin-top: 15px;
-            border-left: 4px solid #ffc107;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
         }
 
         .token-display h3 {
-            color: #856404;
+            color: #667eea;
             margin-bottom: 10px;
             font-size: 1.1em;
         }
@@ -217,81 +200,32 @@
             color: #333;
             line-height: 1.6;
         }
-        
-        .divider {
-            height: 1px;
-            background: #eee;
-            margin: 20px 0;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔐 Auth Service API 통합 테스트</h1>
+        <h1>🔐 Auth Service API 테스트</h1>
 
         <div class="info-box">
             <h3>📌 사용 방법</h3>
             <p>
-                1. <strong>일반 로그인:</strong> 회원가입 -> 이메일 인증 -> 로그인<br>
-                2. <strong>소셜 로그인:</strong> 구글 로그인 버튼 클릭 -> 새 창에서 로그인 -> <strong>결과 JSON 복사</strong> -> '소셜 결과 파싱'에 붙여넣기<br>
-                3. 로그인이 완료되면 토큰이 자동으로 저장되어 '보호된 라우트' 테스트가 가능합니다.
+                1. 회원가입으로 새 계정을 만드세요<br>
+                2. 로그인하면 Access Token과 Refresh Token을 받습니다<br>
+                3. 보호된 라우트는 Access Token이 필요합니다<br>
+                4. 이메일 인증 토큰은 DB에서 확인하세요 (email_verifications 테이블)
             </p>
         </div>
 
         <div class="grid">
+            <!-- Health Check -->
             <div class="card">
                 <h2>🏥 Health Check</h2>
                 <button onclick="healthCheck()">서버 상태 확인</button>
             </div>
 
+            <!-- Register -->
             <div class="card">
-                <h2>🔑 일반 로그인</h2>
-                <div class="form-group">
-                    <label>이메일</label>
-                    <input type="email" id="loginEmail" placeholder="test@example.com">
-                </div>
-                <div class="form-group">
-                    <label>비밀번호</label>
-                    <input type="password" id="loginPassword" placeholder="********">
-                </div>
-                <button onclick="login()">로그인</button>
-                <div style="margin-top: 10px; text-align: center; font-size: 0.9em;">
-                    계정이 없나요? <a href="#registerCard" style="color: #667eea;">회원가입 하기</a>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>🇬 Google 소셜 로그인</h2>
-                <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
-                    버튼을 누르면 구글 로그인 페이지가 <strong>새 창</strong>으로 열립니다.
-                </p>
-                <a href="http://localhost:8080/api/v1/auth/google/login" target="_blank" style="text-decoration: none;">
-                    <button class="btn-google">Google로 로그인 (새 창)</button>
-                </a>
-                
-                <div class="divider"></div>
-                
-                <h3>📋 소셜 결과 파싱</h3>
-                <p style="font-size: 0.8em; color: #888; margin-bottom: 10px;">
-                    새 창에 뜬 JSON 전체를 복사해서 아래에 붙여넣으세요.
-                </p>
-                <div class="form-group">
-                    <textarea id="socialJsonInput" placeholder='{"message": "Google login successful", "data": { ... }}'></textarea>
-                </div>
-                <button class="btn-secondary" onclick="parseSocialLogin()">토큰 적용하기</button>
-            </div>
-
-            <div class="card">
-                <h2>🔒 보호된 라우트</h2>
-                <div class="form-group">
-                    <label>Access Token (자동 입력됨)</label>
-                    <textarea id="protectedToken" placeholder="로그인하면 자동으로 채워집니다"></textarea>
-                </div>
-                <button onclick="getProtectedProfile()">내 프로필 조회</button>
-            </div>
-
-            <div class="card" id="registerCard">
-                <h2>📝 회원가입 (일반)</h2>
+                <h2>📝 회원가입</h2>
                 <div class="form-group">
                     <label>이메일</label>
                     <input type="email" id="registerEmail" placeholder="test@example.com">
@@ -303,39 +237,82 @@
                 <button onclick="register()">회원가입</button>
             </div>
 
+            <!-- Login -->
+            <div class="card">
+                <h2>🔑 로그인</h2>
+                <div class="form-group">
+                    <label>이메일</label>
+                    <input type="email" id="loginEmail" placeholder="test@example.com">
+                </div>
+                <div class="form-group">
+                    <label>비밀번호</label>
+                    <input type="password" id="loginPassword" placeholder="********">
+                </div>
+                <button onclick="login()">로그인</button>
+            </div>
+
+            <!-- Verify Email -->
             <div class="card">
                 <h2>✉️ 이메일 인증</h2>
                 <div class="form-group">
-                    <label>인증 토큰 (DB/메일 확인)</label>
+                    <label>인증 토큰 (DB에서 확인)</label>
                     <input type="text" id="verifyToken" placeholder="uuid-token-here">
                 </div>
                 <button onclick="verifyEmail()">이메일 인증</button>
-                <div style="margin-top: 10px;"></div>
-                <button class="btn-secondary" onclick="resendVerificationPrompt()">인증 메일 재발송</button>
             </div>
 
+            <!-- Resend Verification -->
             <div class="card">
-                <h2>🔄 토큰 관리</h2>
+                <h2>📨 인증 메일 재발송</h2>
+                <div class="form-group">
+                    <label>이메일</label>
+                    <input type="email" id="resendEmail" placeholder="test@example.com">
+                </div>
+                <button onclick="resendVerification()">재발송</button>
+            </div>
+
+            <!-- Protected Route -->
+            <div class="card">
+                <h2>🔒 보호된 라우트</h2>
+                <div class="form-group">
+                    <label>Access Token</label>
+                    <textarea id="protectedToken" placeholder="로그인 후 받은 토큰을 입력하세요"></textarea>
+                </div>
+                <button onclick="getProtectedProfile()">프로필 조회</button>
+            </div>
+
+            <!-- Refresh Token -->
+            <div class="card">
+                <h2>🔄 토큰 갱신</h2>
                 <div class="form-group">
                     <label>Refresh Token</label>
-                    <textarea id="refreshTokenInput" placeholder="로그인하면 자동으로 채워집니다"></textarea>
+                    <textarea id="refreshTokenInput" placeholder="로그인 후 받은 Refresh Token"></textarea>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <button onclick="refreshToken()">갱신</button>
-                    <button class="btn-secondary" onclick="logout()">로그아웃</button>
+                <button onclick="refreshToken()">토큰 갱신</button>
+            </div>
+
+            <!-- Logout -->
+            <div class="card">
+                <h2>🚪 로그아웃</h2>
+                <div class="form-group">
+                    <label>Refresh Token</label>
+                    <textarea id="logoutToken" placeholder="로그인 후 받은 Refresh Token"></textarea>
                 </div>
+                <button onclick="logout()">로그아웃</button>
             </div>
         </div>
 
+        <!-- Token Display -->
         <div class="token-display" id="tokenDisplay" style="display: none;">
-            <h3>💾 현재 활성화된 세션</h3>
+            <h3>💾 저장된 토큰</h3>
             <p><strong>Access Token:</strong> <span id="savedAccessToken"></span></p>
             <p><strong>Refresh Token:</strong> <span id="savedRefreshToken"></span></p>
         </div>
 
+        <!-- Response Area -->
         <div class="response">
             <h2>📤 응답 결과</h2>
-            <div id="responseArea">여기에 API 응답 결과가 표시됩니다...</div>
+            <div id="responseArea">여기에 API 응답이 표시됩니다...</div>
         </div>
     </div>
 
@@ -344,54 +321,28 @@
         let accessToken = '';
         let refreshTokenValue = '';
 
-        // 응답 표시 및 토큰 자동 저장 함수
         function displayResponse(status, data) {
             const responseArea = document.getElementById('responseArea');
             const statusClass = status >= 200 && status < 300 ? 'success' : 'error';
             
             responseArea.innerHTML = `<span class="status ${statusClass}">Status: ${status}</span>\n\n` + 
-                                     JSON.stringify(data, null, 2);
+                                    JSON.stringify(data, null, 2);
 
-            // 로그인 성공 시 (일반 로그인 or 소셜 로그인 파싱) 토큰 저장
+            // 토큰 저장
             if (data.data && data.data.access_token) {
-                saveTokens(data.data.access_token, data.data.refresh_token);
+                accessToken = data.data.access_token;
+                refreshTokenValue = data.data.refresh_token;
+                
+                document.getElementById('savedAccessToken').textContent = accessToken.substring(0, 50) + '...';
+                document.getElementById('savedRefreshToken').textContent = refreshTokenValue.substring(0, 50) + '...';
+                document.getElementById('tokenDisplay').style.display = 'block';
+
+                // 자동으로 토큰 입력 필드에 채우기
+                document.getElementById('protectedToken').value = accessToken;
+                document.getElementById('refreshTokenInput').value = refreshTokenValue;
+                document.getElementById('logoutToken').value = refreshTokenValue;
             }
         }
-
-        // 토큰 저장 및 UI 업데이트 공통 함수
-        function saveTokens(access, refresh) {
-            accessToken = access;
-            refreshTokenValue = refresh;
-            
-            document.getElementById('savedAccessToken').textContent = accessToken.substring(0, 50) + '...';
-            document.getElementById('savedRefreshToken').textContent = refreshTokenValue.substring(0, 50) + '...';
-            document.getElementById('tokenDisplay').style.display = 'block';
-
-            // 입력 필드 자동 채우기
-            document.getElementById('protectedToken').value = accessToken;
-            document.getElementById('refreshTokenInput').value = refreshTokenValue;
-            
-            // 스크롤을 토큰 디스플레이 쪽으로 이동
-            document.getElementById('tokenDisplay').scrollIntoView({ behavior: 'smooth' });
-        }
-
-        // 소셜 로그인 결과 JSON 파싱 함수
-        function parseSocialLogin() {
-            const jsonInput = document.getElementById('socialJsonInput').value;
-            try {
-                const data = JSON.parse(jsonInput);
-                if (data.data && data.data.access_token) {
-                    displayResponse(200, data); // displayResponse가 saveTokens를 호출함
-                    alert("소셜 로그인 토큰이 적용되었습니다!");
-                } else {
-                    alert("유효한 토큰 데이터가 없습니다. JSON을 확인해주세요.");
-                }
-            } catch (e) {
-                alert("JSON 파싱 실패: 복사한 텍스트가 올바른 JSON 형식이 아닙니다.");
-            }
-        }
-
-        // --- API 호출 함수들 ---
 
         async function healthCheck() {
             try {
@@ -415,7 +366,9 @@
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({ email, password })
                 });
                 const data = await response.json();
@@ -437,7 +390,9 @@
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({ email, password })
                 });
                 const data = await response.json();
@@ -449,7 +404,11 @@
 
         async function verifyEmail() {
             const token = document.getElementById('verifyToken').value;
-            if (!token) { alert('인증 토큰을 입력하세요'); return; }
+
+            if (!token) {
+                alert('인증 토큰을 입력하세요');
+                return;
+            }
 
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/auth/verify/${token}`);
@@ -460,31 +419,43 @@
             }
         }
 
-        async function resendVerificationPrompt() {
-            const email = prompt("인증 메일을 재발송할 이메일을 입력하세요:");
-            if (email) {
-                try {
-                    const response = await fetch(`${API_BASE_URL}/api/v1/auth/resend-verify`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email })
-                    });
-                    const data = await response.json();
-                    displayResponse(response.status, data);
-                } catch (error) {
-                    displayResponse(0, { error: error.message });
-                }
+        async function resendVerification() {
+            const email = document.getElementById('resendEmail').value;
+
+            if (!email) {
+                alert('이메일을 입력하세요');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/auth/resend-verify`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email })
+                });
+                const data = await response.json();
+                displayResponse(response.status, data);
+            } catch (error) {
+                displayResponse(0, { error: error.message });
             }
         }
 
         async function getProtectedProfile() {
             const token = document.getElementById('protectedToken').value;
-            if (!token) { alert('Access Token을 입력하세요'); return; }
+
+            if (!token) {
+                alert('Access Token을 입력하세요');
+                return;
+            }
 
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/protected/profile`, {
                     method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
                 });
                 const data = await response.json();
                 displayResponse(response.status, data);
@@ -495,12 +466,18 @@
 
         async function refreshToken() {
             const token = document.getElementById('refreshTokenInput').value;
-            if (!token) { alert('Refresh Token을 입력하세요'); return; }
+
+            if (!token) {
+                alert('Refresh Token을 입력하세요');
+                return;
+            }
 
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({ refresh_token: token })
                 });
                 const data = await response.json();
@@ -511,27 +488,32 @@
         }
 
         async function logout() {
-            const token = document.getElementById('refreshTokenInput').value;
-            if (!token) { alert('Refresh Token을 입력하세요'); return; }
+            const token = document.getElementById('logoutToken').value;
+
+            if (!token) {
+                alert('Refresh Token을 입력하세요');
+                return;
+            }
 
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({ refresh_token: token })
                 });
                 const data = await response.json();
                 displayResponse(response.status, data);
 
+                // 로그아웃 성공 시 토큰 초기화
                 if (response.ok) {
                     accessToken = '';
                     refreshTokenValue = '';
                     document.getElementById('tokenDisplay').style.display = 'none';
                     document.getElementById('protectedToken').value = '';
                     document.getElementById('refreshTokenInput').value = '';
-                    document.getElementById('savedAccessToken').textContent = '';
-                    document.getElementById('savedRefreshToken').textContent = '';
-                    alert("로그아웃 되었습니다.");
+                    document.getElementById('logoutToken').value = '';
                 }
             } catch (error) {
                 displayResponse(0, { error: error.message });
