@@ -1,1 +1,534 @@
-# social-login
+# 🔐 Social Login Service
+
+Go 언어 기반의 이메일 및 소셜 로그인(Google, Naver) 인증 서비스입니다.
+
+## 📋 목차
+
+- [프로젝트 개요](#-프로젝트-개요)
+- [주요 기능](#-주요-기능)
+- [기술 스택](#-기술-스택)
+- [아키텍처](#-아키텍처)
+- [데이터베이스 스키마](#-데이터베이스-스키마)
+- [API 엔드포인트](#-api-엔드포인트)
+- [설치 및 실행](#-설치-및-실행)
+- [환경 변수 설정](#-환경-변수-설정)
+- [디렉토리 구조](#-디렉토리-구조)
+- [테스트 방법](#-테스트-방법)
+- [보안 특성](#-보안-특성)
+- [향후 개선 사항](#-향후-개선-사항)
+
+## 🎯 프로젝트 개요
+
+이메일 기반 회원가입/로그인과 소셜 로그인(Google, Naver)을 지원하는 RESTful API 인증 서비스입니다. JWT 기반 토큰 인증을 사용하며, 소셜 계정 자동 통합 기능을 제공합니다.
+
+### 핵심 기능 하이라이트
+
+- **다중 소셜 로그인 지원**: 한 계정에 여러 소셜 계정 연동 가능 (1:N 구조)
+- **자동 계정 통합**: 동일 이메일로 소셜 로그인 시 기존 계정 자동 연동
+- **트랜잭션 보장**: GORM 트랜잭션으로 데이터 일관성 보장
+- **CSRF 방지**: OAuth2 State 파라미터 암호화 검증
+
+## ✨ 주요 기능
+
+### 1. 이메일 인증 시스템
+- 회원가입 시 이메일 인증 토큰 발송
+- 24시간 유효한 UUID 토큰
+- SMTP를 통한 이메일 발송 (Mailtrap 샌드박스)
+- 인증 메일 재발송 기능
+
+### 2. JWT 기반 인증
+- **Access Token**: 15분 유효 (API 요청 인증)
+- **Refresh Token**: 7일 유효 (Access Token 갱신)
+- HMAC-SHA256 서명
+- Refresh Token DB 저장 및 무효화
+
+### 3. 소셜 로그인
+- **Google OAuth2**: OpenID Connect
+- **Naver OAuth2**: Naver Login API
+- 3가지 시나리오 자동 처리:
+  1. 기존 소셜 계정 로그인
+  2. 기존 이메일 계정에 소셜 연동 (자동 통합)
+  3. 신규 소셜 회원가입
+
+### 4. 비밀번호 보안
+- bcrypt 해싱 (cost 10)
+- 최소 8자 이상 검증
+
+## 🛠 기술 스택
+
+### Backend
+- **언어**: Go 1.21+
+- **프레임워크**: Gin (HTTP 웹 프레임워크)
+- **ORM**: GORM
+- **데이터베이스**: MariaDB 10.3.34
+
+### 주요 라이브러리
+| 라이브러리 | 용도 |
+|-----------|------|
+| `gin-gonic/gin` | HTTP 서버 및 라우팅 |
+| `gorm.io/gorm` | ORM 및 데이터베이스 접근 |
+| `golang-jwt/jwt` | JWT 토큰 생성/검증 |
+| `golang.org/x/oauth2` | OAuth2 클라이언트 |
+| `golang.org/x/crypto/bcrypt` | 비밀번호 해싱 |
+| `go-playground/validator` | 요청 데이터 검증 |
+| `gopkg.in/gomail.v2` | SMTP 이메일 발송 |
+| `joho/godotenv` | 환경 변수 관리 |
+
+## 🏗 아키텍처
+
+### 계층 구조 (Layered Architecture)
+
+```
+┌─────────────────────────────────────────┐
+│   Handler Layer (HTTP 요청/응답 처리)    │
+├─────────────────────────────────────────┤
+│   Service Layer (비즈니스 로직)          │
+├─────────────────────────────────────────┤
+│   Repository Layer (데이터 접근)         │
+├─────────────────────────────────────────┤
+│   GORM + MariaDB (데이터 저장소)         │
+└─────────────────────────────────────────┘
+```
+
+### 의존성 주입 (Dependency Injection)
+
+```go
+// main.go
+userRepo := repository.NewUserRepository(db)
+authService := service.NewAuthService(userRepo, cfg)
+authHandler := handler.NewAuthHandler(authService, cfg)
+```
+
+### 인증 플로우
+
+#### 일반 로그인 플로우
+```
+회원가입 (POST /register)
+   ↓
+이메일 인증 토큰 발송
+   ↓
+이메일 인증 (GET /verify/:token)
+   ↓
+로그인 (POST /login)
+   ↓
+JWT 토큰 발급 (Access + Refresh)
+   ↓
+보호된 API 접근 (Authorization: Bearer {token})
+```
+
+#### 소셜 로그인 플로우
+```
+소셜 로그인 시작 (GET /google|naver/login)
+   ↓
+OAuth2 제공자로 리다이렉트
+   ↓
+사용자 인증 및 동의
+   ↓
+콜백 처리 (GET /google|naver/callback)
+   ↓
+Authorization Code → Access Token 교환
+   ↓
+유저 정보 조회
+   ↓
+SocialLogin 서비스 호출
+   ├─ [Case 1] 기존 소셜 계정 → 로그인
+   ├─ [Case 2] 기존 이메일 계정 → 소셜 연동 (트랜잭션)
+   └─ [Case 3] 신규 회원 → 계정 생성 (트랜잭션)
+   ↓
+JWT 토큰 발급
+```
+
+## 🗃 데이터베이스 스키마
+
+### ERD 개요
+
+```
+┌─────────────┐         ┌────────────────────┐
+│    users    │◄────────│  social_accounts   │ (1:N)
+└─────────────┘         └────────────────────┘
+      │
+      │ (1:N)
+      ├─────────────►┌────────────────────────┐
+      │              │  email_verifications   │
+      │              └────────────────────────┘
+      │
+      └─────────────►┌────────────────────────┐
+                     │    refresh_tokens      │
+                     └────────────────────────┘
+```
+
+## 🌐 API 엔드포인트
+
+### Base URL
+```
+http://localhost:8080/api/v1
+```
+
+### 인증 관련 API
+
+#### 회원가입 및 로그인
+| Method | Endpoint | 설명 | 인증 필요 |
+|--------|----------|------|----------|
+| POST | `/auth/register` | 이메일 회원가입 | ❌ |
+| POST | `/auth/login` | 이메일 로그인 | ❌ |
+| GET | `/auth/verify/:token` | 이메일 인증 | ❌ |
+| POST | `/auth/resend-verify` | 인증 메일 재발송 | ❌ |
+
+#### 토큰 관리
+| Method | Endpoint | 설명 | 인증 필요 |
+|--------|----------|------|----------|
+| POST | `/auth/refresh` | Access Token 갱신 | ❌ |
+| POST | `/auth/logout` | 로그아웃 (토큰 무효화) | ❌ |
+
+#### Google 소셜 로그인
+| Method | Endpoint | 설명 | 인증 필요 |
+|--------|----------|------|----------|
+| GET | `/auth/google/login` | Google 로그인 시작 | ❌ |
+| GET | `/auth/google/callback` | Google 콜백 처리 | ❌ |
+
+#### Naver 소셜 로그인
+| Method | Endpoint | 설명 | 인증 필요 |
+|--------|----------|------|----------|
+| GET | `/auth/naver/login` | Naver 로그인 시작 | ❌ |
+| GET | `/auth/naver/callback` | Naver 콜백 처리 | ❌ |
+
+#### 보호된 라우트
+| Method | Endpoint | 설명 | 인증 필요 |
+|--------|----------|------|----------|
+| GET | `/protected/profile` | 사용자 프로필 조회 | ✅ |
+
+### 요청/응답 예시
+
+#### 회원가입
+```bash
+POST /api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**응답 (201 Created)**
+```json
+{
+  "message": "Registration successful. Please check your email to verify your account before logging in.",
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "email_verified": false,
+    "created_at": "2024-01-14T10:00:00Z"
+  }
+}
+```
+
+#### 로그인
+```bash
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**응답 (200 OK)**
+```json
+{
+  "message": "Login successful",
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIs...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+    "user": {
+      "id": 1,
+      "email": "user@example.com",
+      "email_verified": true
+    }
+  }
+}
+```
+
+#### 보호된 API 호출
+```bash
+GET /api/v1/protected/profile
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
+
+**응답 (200 OK)**
+```json
+{
+  "user_id": 1,
+  "email": "user@example.com",
+  "message": "This is a protected route"
+}
+```
+
+## 🚀 설치 및 실행
+
+### 버전
+
+- Go 1.21 이상
+- MariaDB 10.3 이상
+- Git
+
+### 1. 프로젝트 클론
+
+```bash
+git clone <repository-url>
+cd social-login
+```
+
+### 2. Go 모듈 설치
+
+```bash
+go mod download
+```
+
+### 3. 데이터베이스 설정
+
+```bash
+# MariaDB 접속
+mysql -u root -p
+
+# 데이터베이스 및 유저 생성
+CREATE DATABASE auth_service CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'auth_user'@'localhost' IDENTIFIED BY 'auth1234';
+GRANT ALL PRIVILEGES ON auth_service.* TO 'auth_user'@'localhost';
+FLUSH PRIVILEGES;
+
+# 스키마 생성
+USE auth_service;
+SOURCE database/schema.sql;
+```
+### 4. 소셜 로그인 설정
+
+#### Google OAuth2
+1. [Google Cloud Console](https://console.cloud.google.com/) 접속
+2. 프로젝트 생성
+3. "API 및 서비스" → "OAuth 동의 화면" 설정
+4. "사용자 인증 정보" → "OAuth 2.0 클라이언트 ID" 생성
+   - 애플리케이션 유형: 웹 애플리케이션
+   - 승인된 리디렉션 URI: `http://localhost:8080/api/v1/auth/google/callback`
+5. 클라이언트 ID와 Secret을 `.env`에 입력
+
+#### Naver Login
+1. [네이버 개발자센터](https://developers.naver.com/apps) 접속
+2. 애플리케이션 등록
+   - 애플리케이션 이름: 원하는 이름
+   - 사용 API: 네이버 로그인
+   - 서비스 URL: `http://localhost:8080`
+   - Callback URL: `http://localhost:8080/api/v1/auth/naver/callback`
+3. 제공 정보: 이메일, 이름 선택
+4. 클라이언트 ID와 Secret을 `.env`에 입력
+
+### 5. 서버 실행
+
+```bash
+go run cmd/server/main.go
+```
+
+서버가 정상적으로 시작되면:
+```
+Server starting on :8080
+```
+
+
+## ⚙️ 환경 변수 설정
+
+### 필수 환경 변수
+
+| 변수명 | 설명 | 기본값 |
+|--------|------|--------|
+| `SERVER_PORT` | 서버 포트 | `8080` |
+| `DB_HOST` | 데이터베이스 호스트 | `localhost` |
+| `DB_PORT` | 데이터베이스 포트 | `3306` |
+| `DB_USER` | 데이터베이스 유저 | `auth_user` |
+| `DB_PASSWORD` | 데이터베이스 비밀번호 | - |
+| `DB_NAME` | 데이터베이스 이름 | `auth_service` |
+| `JWT_SECRET` | JWT 서명 키 | - |
+
+### 선택 환경 변수
+
+| 변수명 | 설명 | 기본값 |
+|--------|------|--------|
+| `GIN_MODE` | Gin 실행 모드 | `debug` |
+| `JWT_ACCESS_TOKEN_EXPIRY` | Access Token 유효기간 | `15m` |
+| `JWT_REFRESH_TOKEN_EXPIRY` | Refresh Token 유효기간 | `168h` |
+
+### 소셜 로그인 환경 변수
+
+소셜 로그인을 사용하지 않는 경우 해당 변수는 생략 가능합니다.
+
+| 변수명 | 설명 |
+|--------|------|
+| `GOOGLE_CLIENT_ID` | Google OAuth2 클라이언트 ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth2 클라이언트 Secret |
+| `GOOGLE_REDIRECT_URL` | Google 콜백 URL |
+| `NAVER_CLIENT_ID` | Naver 애플리케이션 클라이언트 ID |
+| `NAVER_CLIENT_SECRET` | Naver 애플리케이션 클라이언트 Secret |
+| `NAVER_REDIRECT_URL` | Naver 콜백 URL |
+
+## 📁 디렉토리 구조
+
+```
+social-login/
+├── cmd/
+│   └── server/
+│       └── main.go                 # 애플리케이션 진입점
+├── internal/
+│   ├── config/
+│   │   └── config.go               # 환경 설정 관리
+│   ├── database/
+│   │   └── mariadb.go              # MariaDB 연결 관리
+│   ├── handler/
+│   │   └── auth_handler.go         # HTTP 요청 핸들러
+│   ├── middleware/
+│   │   └── auth_middleware.go      # JWT 인증 미들웨어
+│   ├── models/
+│   │   └── user.go                 # 데이터 모델 정의
+│   ├── repository/
+│   │   └── user_repository.go      # 데이터 접근 계층
+│   ├── service/
+│   │   └── auth_service.go         # 비즈니스 로직 계층
+│   └── utils/
+│       ├── email.go                # 이메일 발송
+│       ├── jwt.go                  # JWT 토큰 생성/검증
+│       └── password.go             # 비밀번호 암호화/검증
+├── database/
+│   └── schema.sql                  # 데이터베이스 스키마
+├── test/
+│   └── index.html                  # 웹 테스트 UI
+├── .env                            # 환경 변수 파일
+├── go.mod                          # Go 모듈 정의
+├── go.sum                          # 의존성 체크섬
+└── README.md                       # 프로젝트 문서
+```
+
+### 주요 파일 설명
+
+- **`cmd/server/main.go`**: 서버 시작점, 라우터 설정, 의존성 주입
+- **`internal/handler/auth_handler.go`**: HTTP 요청 처리 및 응답
+- **`internal/service/auth_service.go`**: 비즈니스 로직 (회원가입, 로그인, 소셜 로그인)
+- **`internal/repository/user_repository.go`**: 데이터베이스 CRUD 작업
+- **`internal/middleware/auth_middleware.go`**: JWT 토큰 검증 미들웨어
+- **`database/schema.sql`**: 데이터베이스 테이블 생성 SQL
+
+## 🧪 테스트 방법
+
+### 1. 웹 UI 테스트
+
+프로젝트에는 통합 테스트를 위한 웹 UI가 포함되어 있습니다.
+
+```bash
+# 서버 실행
+go run cmd/server/main.go
+
+# 브라우저에서 test/index.html 파일 열기
+```
+
+웹 UI에서 다음 기능을 테스트할 수 있습니다:
+- ✅ Health Check
+- ✅ 이메일 회원가입
+- ✅ 이메일 인증
+- ✅ 로그인
+- ✅ Google 소셜 로그인
+- ✅ Naver 소셜 로그인
+- ✅ 토큰 갱신
+- ✅ 로그아웃
+- ✅ 보호된 라우트 접근
+
+### 2. cURL 테스트
+
+#### 회원가입
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+```
+
+#### 로그인
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+```
+
+#### 보호된 API 호출
+```bash
+curl -X GET http://localhost:8080/api/v1/protected/profile \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### 3. Postman 테스트
+
+Postman 컬렉션을 사용하여 모든 API를 테스트할 수 있습니다.
+
+1. Postman 실행
+2. 새 컬렉션 생성
+3. 위의 API 엔드포인트 표를 참고하여 요청 추가
+4. 환경 변수 설정:
+   - `base_url`: `http://localhost:8080`
+   - `access_token`: 로그인 후 받은 토큰
+
+## 🔒 보안 특성
+
+### 1. 비밀번호 보안
+- **bcrypt 해싱**: cost factor 10
+- **최소 길이 검증**: 8자 이상
+- **솔트 자동 생성**: bcrypt 내장 기능
+
+### 2. JWT 토큰
+- **HMAC-SHA256 서명**: 변조 방지
+- **짧은 만료 시간**: Access Token 15분
+- **Refresh Token 분리**: 7일 유효
+- **Refresh Token DB 저장**: 무효화 가능
+
+### 3. OAuth2 CSRF 방지
+- **랜덤 State 생성**: 32바이트 암호학적 난수
+- **State 쿠키 검증**: 일회용, 5분 유효
+- **HttpOnly 쿠키**: XSS 공격 방지
+
+### 4. 이메일 인증
+- **UUID 토큰**: 예측 불가능
+- **만료 시간**: 24시간
+- **일회용 토큰**: 사용 후 무효화
+
+### 5. 데이터베이스
+- **SQL Injection 방지**: GORM 파라미터화 쿼리
+- **외래키 제약**: 데이터 무결성 보장
+- **CASCADE DELETE**: 관련 데이터 자동 삭제
+
+### 6. CORS 설정
+- **Origin 제한**: 프로덕션에서 설정 필요
+- **메서드 제한**: GET, POST, PUT, DELETE
+- **헤더 제한**: Content-Type, Authorization
+
+### 보안 체크리스트 (프로덕션 배포 전)
+
+- [ ] `.env` 파일을 `.gitignore`에 추가
+- [ ] JWT_SECRET을 강력한 랜덤 문자열로 변경
+- [ ] HTTPS 사용 (OAuth2 쿠키 Secure 플래그)
+- [ ] CORS Origin을 실제 도메인으로 제한
+- [ ] Rate Limiting 추가
+- [ ] 로그 마스킹 (비밀번호, 토큰)
+- [ ] SQL Injection 추가 테스트
+- [ ] XSS, CSRF 취약점 점검
+
+## 🔧 향후 개선 사항
+
+### 기능 추가
+- [ ] **카카오 소셜 로그인** 추가
+- [ ] **비밀번호 찾기/재설정** 기능
+- [ ] **회원 탈퇴** 기능
+- [ ] **프로필 이미지 업로드**
+- [ ] **이메일 변경** 기능
+- [ ] **소셜 계정 연동 해제**
+
+### 보안 강화
+- [ ] **Rate Limiting**: 로그인 시도 횟수 제한
+- [ ] **2FA (Two-Factor Authentication)**: TOTP 기반 2단계 인증
+- [ ] **블랙리스트**: 탈취된 토큰 무효화
+- [ ] **IP 기반 접근 제어**
+- [ ] **로그인 이력 추적**
