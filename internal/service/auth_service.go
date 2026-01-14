@@ -21,6 +21,7 @@ type RegisterResponse struct {
 type AuthService interface {
 	Register(email, password string) (*RegisterResponse, error)
 	Login(email, password string) (*AuthResponse, error)
+	SocialLogin(email, provider, socialID string) (*AuthResponse, error)
 	RefreshToken(refreshToken string) (*AuthResponse, error)
 	Logout(refreshToken string) error
 	VerifyEmail(token string) error
@@ -169,8 +170,8 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 	return s.generateTokens(newUser)
 }
 
+// JWT 토큰 생성 핼퍼 메서드
 func (s *authService) generateTokens(user *models.User) (*AuthResponse, error){
-	// JWT 토큰 생성
 	accessToken, err := utils.GenerateAccessToken(
 		user.ID,
 		user.Email,
