@@ -90,6 +90,17 @@ type NaverUserInfo struct {
 	} `json:"response"`
 }
 
+// 카카오 유저 정보 파싱용 구조체
+type KakaoUserInfo struct {
+	ID      int64 `json:"id"`
+	KakaoAccount struct {
+		Email string `json:"email"`
+		Profile struct {
+			Nickname string `json:"nickname"`
+		} `json:"profile"`
+	} `json:"kakao_account"`
+}
+
 // 회원가입 핸들러
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
@@ -363,6 +374,123 @@ func (h *AuthHandler) NaverCallback(c *gin.Context) {
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Message: "Naver login successful",
+		Data:    authResponse,
+	})
+}
+
+// Kakao 로그인 페이지로 리다이렉트
+func (h *AuthHandler) KakaoLogin(c *gin.Context) {
+	// 카카오 OAuth2 Endpoint 정의
+	kakaoEndpoint := oauth2.Endpoint{
+		AuthURL:  "https://kauth.kakao.com/oauth/authorize",
+		TokenURL: "https://kauth.kakao.com/oauth/token",
+	}
+
+	kakaoOauthConfig := &oauth2.Config{
+		ClientID:     h.cfg.Oauth.KakaoClientID,
+		ClientSecret: h.cfg.Oauth.KakaoClientSecret,
+		RedirectURL:  h.cfg.Oauth.KakaoRedirectURL,
+		Endpoint:     kakaoEndpoint,
+	}
+
+	// CSRF 방지용 랜덤 State 값 생성
+	state, err := generateRandomState()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to generate state"})
+		return
+	}
+
+	// State를 쿠키에 저장 (CSRF 공격 방지)
+	c.SetCookie(
+		"oauth_state",
+		state,
+		300,
+		"/",
+		"",
+		false,
+		true,
+	)
+
+	// 카카오 로그인 URL 생성
+	url := kakaoOauthConfig.AuthCodeURL(state)
+
+	// 사용자를 카카오로 리다이렉트
+	c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+// Kakao 콜백 처리
+func (h *AuthHandler) KakaoCallback(c *gin.Context) {
+	// State 파라미터 검증 (CSRF 방지)
+	state := c.Query("state")
+	savedState, err := c.Cookie("oauth_state")
+	if err != nil || state == "" || state != savedState {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid state parameter"})
+		return
+	}
+
+	// State 쿠키 삭제 (일회용)
+	c.SetCookie("oauth_state", "", -1, "/", "", false, true)
+
+	// 카카오에서 보내준 code 받기
+	code := c.Query("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Authorization code not found"})
+		return
+	}
+
+	// 카카오 OAuth2 Endpoint 정의
+	kakaoEndpoint := oauth2.Endpoint{
+		AuthURL:  "https://kauth.kakao.com/oauth/authorize",
+		TokenURL: "https://kauth.kakao.com/oauth/token",
+	}
+
+	kakaoOauthConfig := &oauth2.Config{
+		ClientID:     h.cfg.Oauth.KakaoClientID,
+		ClientSecret: h.cfg.Oauth.KakaoClientSecret,
+		RedirectURL:  h.cfg.Oauth.KakaoRedirectURL,
+		Endpoint:     kakaoEndpoint,
+	}
+
+	// Code -> Kakao Token 교환
+	token, err := kakaoOauthConfig.Exchange(context.Background(), code)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to exchange code for token"})
+		return
+	}
+
+	// Kakao Token으로 유저 정보 조회
+	client := kakaoOauthConfig.Client(context.Background(), token)
+	resp, err := client.Get("https://kapi.kakao.com/v2/user/me")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get user info from Kakao"})
+		return
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to read response body"})
+		return
+	}
+
+	var kakaoUser KakaoUserInfo
+	if err := json.Unmarshal(data, &kakaoUser); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse user info"})
+		return
+	}
+
+	// 카카오 ID를 문자열로 변환
+	kakaoID := fmt.Sprintf("%d", kakaoUser.ID)
+
+	// Service 계층의 SocialLogin 호출
+	authResponse, err := h.authService.SocialLogin(kakaoUser.KakaoAccount.Email, "kakao", kakaoID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Kakao login successful",
 		Data:    authResponse,
 	})
 }
