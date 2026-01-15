@@ -135,6 +135,17 @@
             box-shadow: 0 5px 15px rgba(3, 199, 90, 0.4);
         }
 
+        /* 카카오 로그인 버튼 전용 스타일 (추가됨) */
+        .btn-kakao {
+            background: #FEE500; /* Kakao Yellow */
+            color: #000000;      /* 카카오는 글자가 검은색이 표준 */
+            margin-top: 10px;
+        }
+        .btn-kakao:hover {
+            background: #e6cf00;
+            box-shadow: 0 5px 15px rgba(254, 229, 0, 0.4);
+        }
+
         .btn-secondary {
             background: #6c757d;
         }
@@ -304,6 +315,22 @@
 
                 <p style="font-size: 0.8em; color: #888; margin-bottom: 10px;">
                     네이버 로그인 결과도 위의 '소셜 결과 파싱' 텍스트박스에 붙여넣으면 됩니다.
+                </p>
+            </div>
+
+            <div class="card">
+                <h2>🟡 Kakao 소셜 로그인</h2>
+                <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
+                    버튼을 누르면 카카오 로그인 페이지가 <strong>새 창</strong>으로 열립니다.
+                </p>
+                <a href="http://localhost:8080/api/v1/auth/kakao/login" target="_blank" style="text-decoration: none;">
+                    <button class="btn-kakao">Kakao로 로그인 (새 창)</button>
+                </a>
+
+                <div class="divider"></div>
+
+                <p style="font-size: 0.8em; color: #888; margin-bottom: 10px;">
+                    카카오 로그인 결과도 위의 <strong>'소셜 결과 파싱'</strong> 텍스트박스에 붙여넣으면 됩니다.
                 </p>
             </div>
 
