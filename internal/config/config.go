@@ -13,7 +13,7 @@ type Config struct {
 	Database DatabaseConfig
 	JWT      JWTConfig
 	Email    EmailConfig
-	Oauth	 OAuthConfig
+	Oauth    OAuthConfig
 	App      AppConfig
 }
 
@@ -47,16 +47,16 @@ type EmailConfig struct {
 	FromEmail    string
 }
 
-type OAuthConfig struct{
-	GoogleClientID string
+type OAuthConfig struct {
+	GoogleClientID     string
 	GoogleClientSecret string
-	GoogleRedirectURL string
-	NaverClientID string
-	NaverClientSecret string
-	NaverRedirectURL string
-	KakaoClientID string
-	KakaoClientSecret string
-	KakaoRedirectURL string
+	GoogleRedirectURL  string
+	NaverClientID      string
+	NaverClientSecret  string
+	NaverRedirectURL   string
+	KakaoClientID      string
+	KakaoClientSecret  string
+	KakaoRedirectURL   string
 }
 
 type AppConfig struct {
@@ -101,15 +101,15 @@ func Load() *Config {
 			FromEmail:    getEnv("EMAIL_FROM", "noreply@yourapp.com"),
 		},
 		Oauth: OAuthConfig{
-			GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
+			GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
 			GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
-			GoogleRedirectURL: getEnv("GOOGLE_REDIRECT_URL", "http://localhost:8080/api/v1/auth/google/callback"),
-			NaverClientID: getEnv("NAVER_CLIENT_ID", ""),
-			NaverClientSecret: getEnv("NAVER_CLIENT_SECRET", ""),
-			NaverRedirectURL: getEnv("NAVER_REDIRECT_URL", "http://localhost:8080/api/v1/auth/naver/callback"),
-			KakaoClientID: getEnv("KAKAO_CLIENT_ID", ""),
-			KakaoClientSecret: getEnv("KAKAO_CLIENT_SECRET", ""),
-			KakaoRedirectURL: getEnv("KAKAO_REDIRECT_URL", "http://localhost:8080/api/v1/auth/kakao/callback"),
+			GoogleRedirectURL:  getEnv("GOOGLE_REDIRECT_URL", "http://localhost:8080/api/v1/auth/google/callback"),
+			NaverClientID:      getEnv("NAVER_CLIENT_ID", ""),
+			NaverClientSecret:  getEnv("NAVER_CLIENT_SECRET", ""),
+			NaverRedirectURL:   getEnv("NAVER_REDIRECT_URL", "http://localhost:8080/api/v1/auth/naver/callback"),
+			KakaoClientID:      getEnv("KAKAO_CLIENT_ID", ""),
+			KakaoClientSecret:  getEnv("KAKAO_CLIENT_SECRET", ""),
+			KakaoRedirectURL:   getEnv("KAKAO_REDIRECT_URL", "http://localhost:8080/api/v1/auth/kakao/callback"),
 		},
 		App: AppConfig{
 			URL:         getEnv("APP_URL", "http://localhost:8080"),

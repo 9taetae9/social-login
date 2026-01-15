@@ -21,7 +21,7 @@ import (
 type AuthHandler struct {
 	authService service.AuthService
 	validate    *validator.Validate
-	cfg			*config.Config // 설정을 직접 저장
+	cfg         *config.Config // 설정을 직접 저장
 }
 
 // 핸들러 생성자
@@ -29,15 +29,15 @@ func NewAuthHandler(authService service.AuthService, cfg *config.Config) *AuthHa
 	return &AuthHandler{
 		authService: authService,
 		validate:    validator.New(),
-		cfg:		 cfg, //주입받은 설정을 저장
+		cfg:         cfg, //주입받은 설정을 저장
 	}
 }
 
 // 회원가입 요청 구조체
 type RegisterRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"`
-	UserType string `json:"user_type" validate:"required,oneof=KOREAN FOREIGNER"`
+	Email       string `json:"email" validate:"required,email"`
+	Password    string `json:"password" validate:"required,min=8"`
+	UserType    string `json:"user_type" validate:"required,oneof=KOREAN FOREIGNER"`
 	PhoneNumber string `json:"phone_number"` // 한국인의 경우 필수
 }
 
@@ -95,9 +95,9 @@ type NaverUserInfo struct {
 
 // 카카오 유저 정보 파싱용 구조체
 type KakaoUserInfo struct {
-	ID      int64 `json:"id"`
+	ID           int64 `json:"id"`
 	KakaoAccount struct {
-		Email string `json:"email"`
+		Email   string `json:"email"`
 		Profile struct {
 			Nickname string `json:"nickname"`
 		} `json:"profile"`
@@ -162,13 +162,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 // Google 로그인 페이지로 리다이렉트
-func (h *AuthHandler) GoogleLogin(c *gin.Context){
+func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 	googleOauthConfig := &oauth2.Config{
-		ClientID: h.cfg.Oauth.GoogleClientID,
+		ClientID:     h.cfg.Oauth.GoogleClientID,
 		ClientSecret: h.cfg.Oauth.GoogleClientSecret,
-		RedirectURL: h.cfg.Oauth.GoogleRedirectURL,
-		Scopes: []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
-		Endpoint: google.Endpoint,
+		RedirectURL:  h.cfg.Oauth.GoogleRedirectURL,
+		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
+		Endpoint:     google.Endpoint,
 	}
 
 	// CSRF 방지용 랜덤 State 값 생성
@@ -180,13 +180,13 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context){
 
 	// State를 쿠키에 저장 (CSRF 공격 방지)
 	c.SetCookie(
-		"oauth_state",           // name
-		state,                   // value
-		300,                     // maxAge (5분)
-		"/",                     // path
-		"",                      // domain
-		false,                   // secure (production에서는 true)
-		true,                    // httpOnly
+		"oauth_state", // name
+		state,         // value
+		300,           // maxAge (5분)
+		"/",           // path
+		"",            // domain
+		false,         // secure (production에서는 true)
+		true,          // httpOnly
 	)
 
 	// 구글 로그인 URL 생성
@@ -197,7 +197,7 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context){
 }
 
 // Google 콜백 처리
-func (h *AuthHandler) GoogleCallback(c *gin.Context){
+func (h *AuthHandler) GoogleCallback(c *gin.Context) {
 	// State 파라미터 검증 (CSRF 방지)
 	state := c.Query("state")
 	savedState, err := c.Cookie("oauth_state")
@@ -211,23 +211,23 @@ func (h *AuthHandler) GoogleCallback(c *gin.Context){
 
 	// 구글에서 보내준 code 받기
 	code := c.Query("code")
-	if code == ""{
+	if code == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Authorization code not found"})
 		return
 	}
 
 	// OAuth 설정 구성
 	googleOauthConfig := &oauth2.Config{
-		ClientID: h.cfg.Oauth.GoogleClientID,
+		ClientID:     h.cfg.Oauth.GoogleClientID,
 		ClientSecret: h.cfg.Oauth.GoogleClientSecret,
-		RedirectURL: h.cfg.Oauth.GoogleRedirectURL,
+		RedirectURL:  h.cfg.Oauth.GoogleRedirectURL,
 		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 		Endpoint:     google.Endpoint,
 	}
 
 	// Code -> Google Token 교환
 	token, err := googleOauthConfig.Exchange(context.Background(), code)
-	if err != nil{
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to exchange code for token"})
 		return
 	}
@@ -235,34 +235,34 @@ func (h *AuthHandler) GoogleCallback(c *gin.Context){
 	// Google Token으로 유저 정보 조회
 	client := googleOauthConfig.Client(context.Background(), token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
-	if err != nil{
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get user info from Google"})
 		return
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
-	if err != nil{
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to read response body"})
 		return
 	}
 
 	var googleUser GoogleUserInfo
-	if err := json.Unmarshal(data, &googleUser); err != nil{
+	if err := json.Unmarshal(data, &googleUser); err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse user info"})
 		return
 	}
 
 	// Service 계층의 SocialLogin 호출
 	authResponse, err := h.authService.SocialLogin(googleUser.Email, "google", googleUser.ID)
-	if err != nil{
+	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 		return
-	}	
+	}
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Message: "Google login successful",
-		Data: authResponse,
+		Data:    authResponse,
 	})
 }
 

@@ -39,11 +39,11 @@ type UserRepository interface {
 }
 
 type userRepository struct {
-    db *gorm.DB
+	db *gorm.DB
 }
 
 func NewUserRepository(db *gorm.DB) UserRepository {
-    return &userRepository{db: db}
+	return &userRepository{db: db}
 }
 
 func (r *userRepository) Create(user *models.User) error {
@@ -59,10 +59,10 @@ func (r *userRepository) FindByEmail(email string) (*models.User, error) {
 	return &user, nil
 }
 
-func (r *userRepository) FindByPhoneNumber(phone string) (*models.User, error){
+func (r *userRepository) FindByPhoneNumber(phone string) (*models.User, error) {
 	var user models.User
 	err := r.db.Where("phone_number = ?", phone).First(&user).Error
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 	return &user, nil
@@ -77,27 +77,27 @@ func (r *userRepository) FindByID(id uint) (*models.User, error) {
 	return &user, nil
 }
 
-//소셜 계정 조회
-func (r *userRepository) FindSocialAccount(provider, socialID string) (*models.SocialAccount, error){
+// 소셜 계정 조회
+func (r *userRepository) FindSocialAccount(provider, socialID string) (*models.SocialAccount, error) {
 	var socialAccount models.SocialAccount
 	// social_accounts 테이블에서 조회
 	err := r.db.Where("provider = ? AND social_id = ?", provider, socialID).First(&socialAccount).Error
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 	return &socialAccount, nil
 }
 
 // 소셜 계정 생성 (연동)
-func (r *userRepository) CreateSocialAccount(socialAccount *models.SocialAccount) error{
+func (r *userRepository) CreateSocialAccount(socialAccount *models.SocialAccount) error {
 	return r.db.Create(socialAccount).Error
 }
 
 // 기존 유저에게 소셜 정보 업데이트(계정 통합용)
-func (r *userRepository) UpdateSocialInfo(userID uint, provider, socialID string) error{
+func (r *userRepository) UpdateSocialInfo(userID uint, provider, socialID string) error {
 	updates := map[string]interface{}{
-		"provider": provider,
-		"social_id": socialID,
+		"provider":       provider,
+		"social_id":      socialID,
 		"email_verified": true,
 	}
 	return r.db.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error
@@ -157,9 +157,9 @@ func (r *userRepository) DeleteExpiredTokens() error {
 	return r.db.Where("expires_at < ?", time.Now()).Delete(&models.EmailVerification{}).Error
 }
 
-func (r *userRepository) WithTrx(fn func(txRepo UserRepository) error) error{
+func (r *userRepository) WithTrx(fn func(txRepo UserRepository) error) error {
 	// GORM Transaction 시작
-	return r.db.Transaction(func(tx *gorm.DB) error{
+	return r.db.Transaction(func(tx *gorm.DB) error {
 		// 트랜잭션이 시작된 DB 객체(tx)를 가진 새로운 Repository 생성
 		txRepo := NewUserRepository(tx)
 		// 비지니스 로직 실행 (여기서 에러 반환 시 자동 Rollback)

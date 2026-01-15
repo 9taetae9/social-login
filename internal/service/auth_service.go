@@ -60,22 +60,22 @@ func (s *authService) Register(email, password, userType, phoneNumber string) (*
 	}
 
 	user := &models.User{
-		Email:         email,
-		PasswordHash:  &hashedPassword,
-		UserType: models.UserType(userType),
-		CountryCode: "KR", // Default
+		Email:        email,
+		PasswordHash: &hashedPassword,
+		UserType:     models.UserType(userType),
+		CountryCode:  "KR", // Default
 	}
 
 	if models.UserType(userType) == models.UserTypeKorean {
 		existingPhone, err := s.userRepo.FindByPhoneNumber(phoneNumber)
-		if err == nil && existingPhone != nil{
+		if err == nil && existingPhone != nil {
 			return nil, errors.New("phone number already in use")
 		}
 
 		user.PhoneNumber = &phoneNumber
 		user.EmailVerified = true // 한국인은 인증된 것으로 간주
-	}else{
-		user.PhoneNumber = nil // 외국인은 전화번호 없음
+	} else {
+		user.PhoneNumber = nil     // 외국인은 전화번호 없음
 		user.EmailVerified = false // 이메일 인증 필요
 	}
 
@@ -116,10 +116,9 @@ func (s *authService) Register(email, password, userType, phoneNumber string) (*
 		}, nil
 	}
 
-	
 	return &RegisterResponse{
 		Message: "Registration successful. You can login immediately.",
-		User: user,
+		User:    user,
 	}, nil
 }
 
@@ -134,7 +133,7 @@ func (s *authService) Login(email, password string) (*AuthResponse, error) {
 		return nil, errors.New("failed to find user")
 	}
 
-	if user.PasswordHash == nil{
+	if user.PasswordHash == nil {
 		return nil, errors.New("this account uses social login. please login in with social account")
 	}
 
@@ -152,15 +151,15 @@ func (s *authService) Login(email, password string) (*AuthResponse, error) {
 }
 
 // 소셜 로그인
-func (s *authService) SocialLogin(email, provider, socialID string) (*AuthResponse, error){
+func (s *authService) SocialLogin(email, provider, socialID string) (*AuthResponse, error) {
 	// 이미 소셜로 연동된 계정이 있는지 확인
 	socialAccount, err := s.userRepo.FindSocialAccount(provider, socialID)
 
-	if err == nil{
+	if err == nil {
 		// [case 1] 이미 가입된 소셜 유저 -> 로그인 성공
 		//GORM Preload를 사용 안했으면 별도 조회 필요
 		user, err := s.userRepo.FindByID(socialAccount.UserID)
-		if err != nil{
+		if err != nil {
 			return nil, errors.New("linked user not found")
 		}
 		return s.generateTokens(user)
@@ -168,23 +167,23 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 
 	// 소셜 계정이 없다면, 이메일로 기존 가입자가 있는지 확인
 	user, err := s.userRepo.FindByEmail(email)
-	if err == nil{
+	if err == nil {
 		err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
 			// [case 2] 기존 이메일 가입자 존재 -> 계정 통합 (Update)
 			// ** 보안 정책에 따라 비밀번호 확인을 요구할 수도 있음 (현재는 편의상 통합)
 			newSocialAccount := &models.SocialAccount{
-				UserID: user.ID,
+				UserID:   user.ID,
 				Provider: provider,
 				SocialID: socialID,
-				Email: email,
+				Email:    email,
 			}
 
-			if err := txRepo.CreateSocialAccount(newSocialAccount); err != nil{
+			if err := txRepo.CreateSocialAccount(newSocialAccount); err != nil {
 				return err // Rollback
 			}
 
-			if !user.EmailVerified{
-				if err := txRepo.UpdateEmailVerified(user.ID); err != nil{
+			if !user.EmailVerified {
+				if err := txRepo.UpdateEmailVerified(user.ID); err != nil {
 					return err // Rollback
 				}
 				user.EmailVerified = true
@@ -192,7 +191,7 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 			return nil // Commit
 		})
 
-		if err != nil{
+		if err != nil {
 			return nil, errors.New("failed to link social account")
 		}
 		return s.generateTokens(user)
@@ -201,31 +200,31 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 	// [case 3] 최초 가입자 -> User 생성 + SocialAccount 생성
 	// 트랜잭션 처리 구간
 	newUser := &models.User{
-		Email: email,
-		PasswordHash: nil,
+		Email:         email,
+		PasswordHash:  nil,
 		EmailVerified: true,
 	}
 
 	err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
 		// 3-1. User 본체 생성
-		if err := txRepo.Create(newUser); err != nil{
+		if err := txRepo.Create(newUser); err != nil {
 			return err
 		}
-	
+
 		// 3-2. SocialAccount 연결 생성
 		newSocialAccount := &models.SocialAccount{
-			UserID: newUser.ID,
+			UserID:   newUser.ID,
 			Provider: provider,
 			SocialID: socialID,
-			Email: email,
+			Email:    email,
 		}
-		if err := txRepo.CreateSocialAccount(newSocialAccount); err != nil{
+		if err := txRepo.CreateSocialAccount(newSocialAccount); err != nil {
 			return err
-		}	
+		}
 		return nil // Commit
 	})
 
-	if err != nil{
+	if err != nil {
 		return nil, errors.New("failed to create social user")
 	}
 
@@ -233,7 +232,7 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 }
 
 // JWT 토큰 생성 핼퍼 메서드
-func (s *authService) generateTokens(user *models.User) (*AuthResponse, error){
+func (s *authService) generateTokens(user *models.User) (*AuthResponse, error) {
 	accessToken, err := utils.GenerateAccessToken(
 		user.ID,
 		user.Email,
