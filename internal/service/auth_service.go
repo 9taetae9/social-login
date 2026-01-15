@@ -19,7 +19,7 @@ type RegisterResponse struct {
 }
 
 type AuthService interface {
-	Register(email, password string) (*RegisterResponse, error)
+	Register(email, password, userType, phoneNumber string) (*RegisterResponse, error)
 	Login(email, password string) (*AuthResponse, error)
 	SocialLogin(email, provider, socialID string) (*AuthResponse, error)
 	RefreshToken(refreshToken string) (*AuthResponse, error)
@@ -47,7 +47,7 @@ func NewAuthService(userRepo repository.UserRepository, cfg *config.Config) Auth
 }
 
 // 회원가입
-func (s *authService) Register(email, password string) (*RegisterResponse, error) {
+func (s *authService) Register(email, password, userType, phoneNumber string) (*RegisterResponse, error) {
 	// 이메일 중복 확인
 	existingUser, err := s.userRepo.FindByEmail(email)
 	if err == nil && existingUser != nil {
@@ -62,42 +62,64 @@ func (s *authService) Register(email, password string) (*RegisterResponse, error
 	user := &models.User{
 		Email:         email,
 		PasswordHash:  &hashedPassword,
-		EmailVerified: false,
+		UserType: models.UserType(userType),
+		CountryCode: "KR", // Default
+	}
+
+	if models.UserType(userType) == models.UserTypeKorean {
+		existingPhone, err := s.userRepo.FindByPhoneNumber(phoneNumber)
+		if err == nil && existingPhone != nil{
+			return nil, errors.New("phone number already in use")
+		}
+
+		user.PhoneNumber = &phoneNumber
+		user.EmailVerified = true // 한국인은 인증된 것으로 간주
+	}else{
+		user.PhoneNumber = nil // 외국인은 전화번호 없음
+		user.EmailVerified = false // 이메일 인증 필요
 	}
 
 	if err := s.userRepo.Create(user); err != nil {
 		return nil, errors.New("failed to create user")
 	}
 
-	verificationToken := uuid.New().String()
-	emailVerification := &models.EmailVerification{
-		UserID:    user.ID,
-		Token:     verificationToken,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
-		Verified:  false,
+	if user.UserType == models.UserTypeForeigner { // 외국인인 경우에만 인증 이메일 발송
+		verificationToken := uuid.New().String()
+		emailVerification := &models.EmailVerification{
+			UserID:    user.ID,
+			Token:     verificationToken,
+			ExpiresAt: time.Now().Add(24 * time.Hour),
+			Verified:  false,
+		}
+
+		if err := s.userRepo.CreateEmailVerification(emailVerification); err != nil {
+			return nil, errors.New("failed to create email verification")
+		}
+
+		// 인증 이메일 발송
+		emailCfg := utils.EmailConfig{
+			SMTPHost:     s.cfg.Email.SMTPHost,
+			SMTPPort:     s.cfg.Email.SMTPPort,
+			SMTPUsername: s.cfg.Email.SMTPUsername,
+			SMTPPassword: s.cfg.Email.SMTPPassword,
+			FromEmail:    s.cfg.Email.FromEmail,
+		}
+
+		if err := utils.SendVerificationEmail(email, verificationToken, s.cfg.App.URL, emailCfg); err != nil {
+			// 이메일 발송 실패는 로그만 남기고 계속 진행
+			log.Printf("Failed to send verification email: %v", err)
+		}
+
+		return &RegisterResponse{
+			Message: "Registration successful. Please check your email to verify your account before logging in.",
+			User:    user,
+		}, nil
 	}
 
-	if err := s.userRepo.CreateEmailVerification(emailVerification); err != nil {
-		return nil, errors.New("failed to create email verification")
-	}
-
-	// 인증 이메일 발송
-	emailCfg := utils.EmailConfig{
-		SMTPHost:     s.cfg.Email.SMTPHost,
-		SMTPPort:     s.cfg.Email.SMTPPort,
-		SMTPUsername: s.cfg.Email.SMTPUsername,
-		SMTPPassword: s.cfg.Email.SMTPPassword,
-		FromEmail:    s.cfg.Email.FromEmail,
-	}
-
-	if err := utils.SendVerificationEmail(email, verificationToken, s.cfg.App.URL, emailCfg); err != nil {
-		// 이메일 발송 실패는 로그만 남기고 계속 진행
-		log.Printf("Failed to send verification email: %v", err)
-	}
-
+	
 	return &RegisterResponse{
-		Message: "Registration successful. Please check your email to verify your account before logging in.",
-		User:    user,
+		Message: "Registration successful. You can login immediately.",
+		User: user,
 	}, nil
 }
 
