@@ -54,6 +54,9 @@ type OAuthConfig struct{
 	NaverClientID string
 	NaverClientSecret string
 	NaverRedirectURL string
+	KakaoClientID string
+	KakaoClientSecret string
+	KakaoRedirectURL string
 }
 
 type AppConfig struct {
@@ -104,6 +107,9 @@ func Load() *Config {
 			NaverClientID: getEnv("NAVER_CLIENT_ID", ""),
 			NaverClientSecret: getEnv("NAVER_CLIENT_SECRET", ""),
 			NaverRedirectURL: getEnv("NAVER_REDIRECT_URL", "http://localhost:8080/api/v1/auth/naver/callback"),
+			KakaoClientID: getEnv("KAKAO_CLIENT_ID", ""),
+			KakaoClientSecret: getEnv("KAKAO_CLIENT_SECRET", ""),
+			KakaoRedirectURL: getEnv("KAKAO_REDIRECT_URL", "http://localhost:8080/api/v1/auth/kakao/callback"),
 		},
 		App: AppConfig{
 			URL:         getEnv("APP_URL", "http://localhost:8080"),
