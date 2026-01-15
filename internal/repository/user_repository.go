@@ -11,6 +11,7 @@ import (
 type UserRepository interface {
 	Create(user *models.User) error
 	FindByEmail(email string) (*models.User, error)
+	FindByPhoneNumber(phone string) (*models.User, error)
 	FindByID(id uint) (*models.User, error)
 	UpdateEmailVerified(userId uint) error
 
@@ -53,6 +54,15 @@ func (r *userRepository) FindByEmail(email string) (*models.User, error) {
 	var user models.User
 	err := r.db.Where("email = ?", email).First(&user).Error
 	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *userRepository) FindByPhoneNumber(phone string) (*models.User, error){
+	var user models.User
+	err := r.db.Where("phone_number = ?", phone).First(&user).Error
+	if err != nil{
 		return nil, err
 	}
 	return &user, nil
