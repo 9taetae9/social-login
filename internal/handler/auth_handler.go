@@ -37,6 +37,8 @@ func NewAuthHandler(authService service.AuthService, cfg *config.Config) *AuthHa
 type RegisterRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8"`
+	UserType string `json:"user_type" validate:"required,oneof=KOREAN FOREIGNER"`
+	PhoneNumber string `json:"phone_number"` // 한국인의 경우 필수
 }
 
 // 로그인 요청 구조체
@@ -116,8 +118,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	if req.UserType == "KOREAN" && req.PhoneNumber == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Phone number is required for Korean users"})
+		return
+	}
+
 	// 회원가입 처리
-	response, err := h.authService.Register(req.Email, req.Password)
+	response, err := h.authService.Register(req.Email, req.Password, req.UserType, req.PhoneNumber)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 		return
