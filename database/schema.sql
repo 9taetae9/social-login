@@ -64,3 +64,18 @@ CREATE TABLE social_accounts (
 ALTER TABLE users
 DROP COLUMN provider,
 DROP COLUMN social_id;
+
+ALTER TABLE users
+ADD COLUMN phone_number VARCHAR(20) NULL UNIQUE AFTER email, -- 한국인은 필수
+ADD COLUMN country_code VARCHAR(10) DEFAULT 'KR' AFTER phone_number, -- 국가 코드
+ADD COLUMN user_type ENUM('KOREAN', 'FOREIGNER') NOT NULL DEFAULT 'KOREAN' AFTER country_code;
+
+CREATE TABLE sms_verifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    phone_number VARCHAR(20) NOT NULL,
+    code VARCHAR(6) NOT NULL,
+    verified BOOLEAN DEFAULT FALSE,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_phone (phone_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
