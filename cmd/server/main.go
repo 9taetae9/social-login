@@ -67,6 +67,8 @@ func main() {
 			auth.GET("/google/callback", authHandler.GoogleCallback)
 			auth.GET("/naver/login", authHandler.NaverLogin)
 			auth.GET("/naver/callback", authHandler.NaverCallback)
+			auth.GET("/kakao/login", authHandler.KakaoLogin)
+			auth.GET("/kakao/callback", authHandler.KakaoCallback)
 		}
 
 		protected := v1.Group("/protected")
