@@ -299,6 +299,80 @@
             border-radius: 4px;
             border-left: 3px solid #667eea;
         }
+
+        /* --- [추가] 모달(팝업) 스타일 --- */
+        .modal {
+            display: none; /* 기본적으로 숨김 */
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5); /* 반투명 검은 배경 */
+            animation: fadeIn 0.3s;
+        }
+
+        .modal-content {
+            background-color: #fff;
+            margin: 15% auto; /* 화면 상단에서 15% 위치 */
+            padding: 25px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            position: relative;
+        }
+
+        .modal-header {
+            color: #721c24;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+            font-weight: bold;
+        }
+
+        .modal-body {
+            color: #333;
+            font-size: 1.1em;
+            margin-bottom: 25px;
+            word-break: break-all;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            color: #aaa;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close-btn:hover {
+            color: black;
+        }
+
+        .modal-confirm-btn {
+            background: #721c24;
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .modal-confirm-btn:hover {
+            background: #5a161d;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
     </style>
 </head>
 
@@ -347,7 +421,7 @@
                         <label>비밀번호</label>
                         <input type="password" id="regPassKor" placeholder="********">
                     </div>
-                    <button onclick="register('KOREAN')">가입하기 (즉시 완료)</button>
+                    <button onclick="register('KOREAN')">가입하기</button>
                 </div>
 
                 <div id="tab-foreigner" class="tab-content">
@@ -365,18 +439,6 @@
                     <button onclick="register('FOREIGNER')">Sign Up (Send Email)</button>
                 </div>
             </div>
-            <!-- <div class="card" id="registerCard">
-                <h2>📝 회원가입 (일반)</h2>
-                <div class="form-group">
-                    <label>이메일</label>
-                    <input type="email" id="registerEmail" placeholder="test@example.com">
-                </div>
-                <div class="form-group">
-                    <label>비밀번호 (최소 8자)</label>
-                    <input type="password" id="registerPassword" placeholder="********">
-                </div>
-                <button onclick="register()">회원가입</button>
-            </div> -->
 
             <div class="card">
                 <h2>🔑 일반 로그인</h2>
@@ -493,10 +555,45 @@
         </div>
     </div>
 
+    <div id="errorModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <div class="modal-header">⚠️ 오류 발생</div>
+            <div class="modal-body" id="modalMessage">
+                알 수 없는 오류가 발생했습니다.
+            </div>
+            <button class="modal-confirm-btn" onclick="closeModal()">확인</button>
+        </div>
+    </div>
+
     <script>
         const API_BASE_URL = 'http://localhost:8080';
         let accessToken = '';
         let refreshTokenValue = '';
+
+        // [추가] 모달 제어 함수
+        function showErrorModal(status, errorMessage) {
+            const modal = document.getElementById('errorModal');
+            const messageEl = document.getElementById('modalMessage');
+            
+            // 상태 코드가 있으면 함께 표시
+            const displayMsg = status ? `[Status: ${status}]<br>${errorMessage}` : errorMessage;
+            messageEl.innerHTML = displayMsg;
+            
+            modal.style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('errorModal').style.display = 'none';
+        }
+
+        // 모달 바깥 영역 클릭 시 닫기
+        window.onclick = function(event) {
+            const modal = document.getElementById('errorModal');
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
 
         // 응답 표시 및 토큰 자동 저장 함수
         function displayResponse(status, data) {
@@ -505,6 +602,15 @@
 
             responseArea.innerHTML = `<span class="status ${statusClass}">Status: ${status}</span>\n\n` +
                 JSON.stringify(data, null, 2);
+
+            // [수정] 에러 발생 시 (Status 0 또는 400 이상) 모달 띄우기
+            if (status === 0 || status >= 400) {
+                let msg = "오류가 발생했습니다.";
+                if (data.error) msg = data.error;
+                else if (data.message) msg = data.message;
+                
+                showErrorModal(status, msg);
+            }
 
             // 로그인 성공 시 (일반 로그인 or 소셜 로그인 파싱) 토큰 저장
             if (data.data && data.data.access_token) {
@@ -538,10 +644,10 @@
                     displayResponse(200, data); // displayResponse가 saveTokens를 호출함
                     alert("소셜 로그인 토큰이 적용되었습니다!");
                 } else {
-                    alert("유효한 토큰 데이터가 없습니다. JSON을 확인해주세요.");
+                    showErrorModal(0, "유효한 토큰 데이터가 없습니다. JSON을 확인해주세요.");
                 }
             } catch (e) {
-                alert("JSON 파싱 실패: 복사한 텍스트가 올바른 JSON 형식이 아닙니다.");
+                showErrorModal(0, "JSON 파싱 실패: 복사한 텍스트가 올바른 JSON 형식이 아닙니다.");
             }
         }
 
@@ -550,7 +656,6 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
             // 2. 현재 클릭된 버튼에 active 클래스 추가
-            // (HTML에서 this를 넘겨주지 않았을 경우를 대비해 방어 코드 추가)
             if (btnElement) {
                 btnElement.classList.add('active');
             }
@@ -564,6 +669,13 @@
             } else {
                 document.getElementById('tab-foreigner').classList.add('active');
             }
+        }
+
+        // 하이픈 자동 입력 (간단 버전)
+        function autoHyphen(target) {
+            target.value = target.value
+                .replace(/[^0-9]/g, '')
+                .replace(/^(\d{0,3})(\d{0,4})(\d{0,4})$/g, "$1-$2-$3").replace(/(\-{1,2})$/g, "");
         }
 
         // --- API 호출 함수들 ---
@@ -586,14 +698,17 @@
                 password = document.getElementById('regPassKor').value;
                 phoneNumber = document.getElementById('regPhoneKor').value;
 
-                if (!phoneNumber) { alert('본인 인증을 위해 전화번호를 입력해주세요.'); return; }
+                if (!phoneNumber) { 
+                    showErrorModal(0, '본인 인증을 위해 전화번호를 입력해주세요.'); 
+                    return; 
+                }
             } else {
                 email = document.getElementById('regEmailFor').value;
                 password = document.getElementById('regPassFor').value;
             }
 
             if (!email || !password) {
-                alert('이메일과 비밀번호를 입력하세요');
+                showErrorModal(0, '이메일과 비밀번호를 입력하세요');
                 return;
             }
 
@@ -616,34 +731,13 @@
                 displayResponse(0, { error: error.message });
             }
         }
-        // async function register() {
-        //     const email = document.getElementById('registerEmail').value;
-        //     const password = document.getElementById('registerPassword').value;
-
-        //     if (!email || !password) {
-        //         alert('이메일과 비밀번호를 입력하세요');
-        //         return;
-        //     }
-
-        //     try {
-        //         const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
-        //             method: 'POST',
-        //             headers: { 'Content-Type': 'application/json' },
-        //             body: JSON.stringify({ email, password })
-        //         });
-        //         const data = await response.json();
-        //         displayResponse(response.status, data);
-        //     } catch (error) {
-        //         displayResponse(0, { error: error.message });
-        //     }
-        // }
 
         async function login() {
             const email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
 
             if (!email || !password) {
-                alert('이메일과 비밀번호를 입력하세요');
+                showErrorModal(0, '이메일과 비밀번호를 입력하세요');
                 return;
             }
 
@@ -662,7 +756,7 @@
 
         async function verifyEmail() {
             const token = document.getElementById('verifyToken').value;
-            if (!token) { alert('인증 토큰을 입력하세요'); return; }
+            if (!token) { showErrorModal(0, '인증 토큰을 입력하세요'); return; }
 
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/auth/verify/${token}`);
@@ -692,7 +786,7 @@
 
         async function getProtectedProfile() {
             const token = document.getElementById('protectedToken').value;
-            if (!token) { alert('Access Token을 입력하세요'); return; }
+            if (!token) { showErrorModal(0, 'Access Token을 입력하세요'); return; }
 
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/protected/profile`, {
@@ -708,7 +802,7 @@
 
         async function refreshToken() {
             const token = document.getElementById('refreshTokenInput').value;
-            if (!token) { alert('Refresh Token을 입력하세요'); return; }
+            if (!token) { showErrorModal(0, 'Refresh Token을 입력하세요'); return; }
 
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
@@ -725,7 +819,7 @@
 
         async function logout() {
             const token = document.getElementById('refreshTokenInput').value;
-            if (!token) { alert('Refresh Token을 입력하세요'); return; }
+            if (!token) { showErrorModal(0, 'Refresh Token을 입력하세요'); return; }
 
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
