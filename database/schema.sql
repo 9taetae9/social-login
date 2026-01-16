@@ -77,3 +77,8 @@ CREATE TABLE sms_verifications (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_phone (phone_number)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+ALTER TABLE users MODIFY COLUMN country_code VARCHAR(10) NULL;
+
+ALTER TABLE users
+MODIFY COLUMN user_type ENUM('KOREAN', 'FOREIGNER') NULL;

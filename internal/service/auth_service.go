@@ -59,11 +59,12 @@ func (s *authService) Register(email, password, userType, phoneNumber string) (*
 		return nil, errors.New("failed to hash password")
 	}
 
+	uType := models.UserType(userType)
+
 	user := &models.User{
 		Email:        email,
 		PasswordHash: &hashedPassword,
-		UserType:     models.UserType(userType),
-		CountryCode:  "KR", // Default
+		UserType:     &uType,
 	}
 
 	if models.UserType(userType) == models.UserTypeKorean {
@@ -74,16 +75,20 @@ func (s *authService) Register(email, password, userType, phoneNumber string) (*
 
 		user.PhoneNumber = &phoneNumber
 		user.EmailVerified = true // 한국인은 인증된 것으로 간주
+		user.CountryCode = "KR"
 	} else {
 		user.PhoneNumber = nil     // 외국인은 전화번호 없음
 		user.EmailVerified = false // 이메일 인증 필요
+		//user.CountryCode 외국인은 가입시 null 처리
+		fType := models.UserTypeForeigner
+		user.UserType = &fType
 	}
 
 	if err := s.userRepo.Create(user); err != nil {
 		return nil, errors.New("failed to create user")
 	}
 
-	if user.UserType == models.UserTypeForeigner { // 외국인인 경우에만 인증 이메일 발송
+	if *user.UserType == models.UserTypeForeigner { // 외국인인 경우에만 인증 이메일 발송
 		verificationToken := uuid.New().String()
 		emailVerification := &models.EmailVerification{
 			UserID:    user.ID,

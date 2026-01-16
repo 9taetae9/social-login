@@ -15,9 +15,9 @@ type User struct {
 	//PasswordHash *string: not null -> null 허용 변경(소셜 로그인 유저 비번 X)
 	PasswordHash *string `gorm:"size:255" json:"-"` // json:"-"는 JSON 응답에서 제외,
 
-	UserType    UserType `gorm:"type:varchar(20);default:'FOREIGNER'" json:"user_type"` // KOREAN or FOREIGNER
-	PhoneNumber *string  `gorm:"uniqueIndex;size:20" json:"phone_number"`               // 한국인 필수, 유니크 (NULL 허용)
-	CountryCode string   `gorm:"size:5;default:'KR'" json:"country_code"`               // 국가 코드
+	UserType    *UserType `gorm:"type:varchar(20); " json:"user_type"`     // KOREAN or FOREIGNER
+	PhoneNumber *string   `gorm:"uniqueIndex;size:20" json:"phone_number"` // 한국인 필수, 유니크 (NULL 허용)
+	CountryCode string    `gorm:"size:5;" json:"country_code"`             // 국가 코드
 
 	EmailVerified  bool            `gorm:"default:false" json:"email_verified"`
 	CreatedAt      time.Time       `json:"created_at"`
