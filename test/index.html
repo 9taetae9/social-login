@@ -302,20 +302,23 @@
 
         /* --- [추가] 모달(팝업) 스타일 --- */
         .modal {
-            display: none; /* 기본적으로 숨김 */
+            display: none;
+            /* 기본적으로 숨김 */
             position: fixed;
             z-index: 1000;
             left: 0;
             top: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.5); /* 반투명 검은 배경 */
+            background-color: rgba(0, 0, 0, 0.5);
+            /* 반투명 검은 배경 */
             animation: fadeIn 0.3s;
         }
 
         .modal-content {
             background-color: #fff;
-            margin: 15% auto; /* 화면 상단에서 15% 위치 */
+            margin: 15% auto;
+            /* 화면 상단에서 15% 위치 */
             padding: 25px;
             border: 1px solid #888;
             width: 80%;
@@ -370,8 +373,13 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
         }
     </style>
 </head>
@@ -575,11 +583,11 @@
         function showErrorModal(status, errorMessage) {
             const modal = document.getElementById('errorModal');
             const messageEl = document.getElementById('modalMessage');
-            
+
             // 상태 코드가 있으면 함께 표시
             const displayMsg = status ? `[Status: ${status}]<br>${errorMessage}` : errorMessage;
             messageEl.innerHTML = displayMsg;
-            
+
             modal.style.display = 'block';
         }
 
@@ -588,7 +596,7 @@
         }
 
         // 모달 바깥 영역 클릭 시 닫기
-        window.onclick = function(event) {
+        window.onclick = function (event) {
             const modal = document.getElementById('errorModal');
             if (event.target == modal) {
                 modal.style.display = "none";
@@ -608,7 +616,7 @@
                 let msg = "오류가 발생했습니다.";
                 if (data.error) msg = data.error;
                 else if (data.message) msg = data.message;
-                
+
                 showErrorModal(status, msg);
             }
 
@@ -698,9 +706,9 @@
                 password = document.getElementById('regPassKor').value;
                 phoneNumber = document.getElementById('regPhoneKor').value;
 
-                if (!phoneNumber) { 
-                    showErrorModal(0, '본인 인증을 위해 전화번호를 입력해주세요.'); 
-                    return; 
+                if (!phoneNumber) {
+                    showErrorModal(0, '본인 인증을 위해 전화번호를 입력해주세요.');
+                    return;
                 }
             } else {
                 email = document.getElementById('regEmailFor').value;
