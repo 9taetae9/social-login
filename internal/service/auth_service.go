@@ -287,10 +287,8 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 	}
 
 	// UserNotFound가 아닌 다른 에러면 반환
-	if err != nil {
-		if appErr, ok := err.(*errors.AppError); ok && appErr.Code != errors.ErrCodeUserNotFound {
-			return nil, err
-		}
+	if appErr, ok := err.(*errors.AppError); ok && appErr.Code != errors.ErrCodeUserNotFound {
+		return nil, err
 	}
 
 	// [case 3] 최초 가입자 -> User 생성 + SocialAccount 생성
