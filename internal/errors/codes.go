@@ -37,9 +37,13 @@ const (
 	ErrCodeDBTransaction = "DB_TRANSACTION_ERROR"
 
 	// Social Login Errors (SOCIAL_XXX)
-	ErrCodeSocialLinkFailed   = "SOCIAL_LINK_FAILED"
-	ErrCodeSocialCreateFailed = "SOCIAL_CREATE_FAILED"
-	ErrCodeSocialNotFound     = "SOCIAL_NOT_FOUND"
+	ErrCodeSocialLinkFailed              = "SOCIAL_LINK_FAILED"
+	ErrCodeSocialCreateFailed            = "SOCIAL_CREATE_FAILED"
+	ErrCodeSocialNotFound                = "SOCIAL_NOT_FOUND"
+	ErrCodeSocialLinkVerificationRequired = "SOCIAL_LINK_VERIFICATION_REQUIRED"
+	ErrCodeSocialLinkNotFound            = "SOCIAL_LINK_NOT_FOUND"
+	ErrCodeSocialLinkExpired             = "SOCIAL_LINK_EXPIRED"
+	ErrCodeSocialLinkInvalidPassword     = "SOCIAL_LINK_INVALID_PASSWORD"
 
 	// Internal Errors (INTERNAL_XXX)
 	ErrCodeInternal = "INTERNAL_ERROR"
