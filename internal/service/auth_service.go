@@ -26,6 +26,8 @@ type AuthService interface {
 	Logout(refreshToken string) error
 	VerifyEmail(token string) error
 	ResendVerificationEmail(email string) error
+	ConfirmSocialLinkByPassword(linkToken, password string) (*AuthResponse, error)
+	ConfirmSocialLinkByEmailToken(emailToken string) (*AuthResponse, error)
 }
 
 type authService struct {
@@ -249,41 +251,75 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 	// 소셜 계정이 없다면, 이메일로 기존 가입자가 있는지 확인
 	user, err := s.userRepo.FindByEmail(email)
 	if err == nil {
-		// [case 2] 기존 이메일 가입자 존재 -> 계정 통합
-		slog.Info("Social login: linking to existing email account",
+		// [case 2] 기존 이메일 가입자 존재 -> 검증 후 계정 통합
+		slog.Info("Social login: verification required for existing email account",
 			"email", logger.SanitizeEmail(email),
 			"provider", provider,
 			"user_id", user.ID,
 		)
 
-		err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
-			newSocialAccount := &models.SocialAccount{
-				UserID:   user.ID,
-				Provider: provider,
-				SocialID: socialID,
-				Email:    email,
-			}
+		// 기존 pending link가 있으면 삭제
+		_ = s.userRepo.DeletePendingSocialLinksByUserID(user.ID)
 
-			if err := txRepo.CreateSocialAccount(newSocialAccount); err != nil {
-				return err // Rollback
-			}
-
-			if !user.EmailVerified {
-				if err := txRepo.UpdateEmailVerified(user.ID); err != nil {
-					return err // Rollback
-				}
-				user.EmailVerified = true
-			}
-			return nil // Commit
-		})
-
-		if err != nil {
-			slog.Error("Failed to link social account", "error", err, "provider", provider)
-			return nil, errors.NewInternalError(errors.ErrCodeSocialLinkFailed, "Failed to link social account", err)
+		// PendingSocialLink 생성 (link_token + email_token 둘 다 생성)
+		linkToken := uuid.New().String()
+		emailToken := uuid.New().String()
+		pendingLink := &models.PendingSocialLink{
+			UserID:     user.ID,
+			Provider:   provider,
+			SocialID:   socialID,
+			Email:      email,
+			LinkToken:  linkToken,
+			EmailToken: &emailToken,
+			ExpiresAt:  time.Now().Add(15 * time.Minute), // 15분 유효
 		}
 
-		slog.Info("Social account linked successfully", "user_id", user.ID, "provider", provider)
-		return s.generateTokens(user)
+		if err := s.userRepo.CreatePendingSocialLink(pendingLink); err != nil {
+			slog.Error("Failed to create pending social link", "error", err, "provider", provider)
+			return nil, errors.NewInternalError(errors.ErrCodeSocialLinkFailed, "Failed to initiate social link verification", err)
+		}
+
+		// 이메일 인증 메일 발송
+		emailSent := false
+		emailCfg := utils.EmailConfig{
+			SMTPHost:     s.cfg.Email.SMTPHost,
+			SMTPPort:     s.cfg.Email.SMTPPort,
+			SMTPUsername: s.cfg.Email.SMTPUsername,
+			SMTPPassword: s.cfg.Email.SMTPPassword,
+			FromEmail:    s.cfg.Email.FromEmail,
+		}
+
+		if err := utils.SendSocialLinkVerificationEmail(email, emailToken, provider, s.cfg.App.URL, emailCfg); err != nil {
+			slog.Warn("Failed to send social link verification email",
+				"error", err,
+				"email", logger.SanitizeEmail(email),
+			)
+		} else {
+			emailSent = true
+			slog.Info("Social link verification email sent",
+				"email", logger.SanitizeEmail(email),
+				"provider", provider,
+			)
+		}
+
+		slog.Info("Pending social link created, verification required",
+			"user_id", user.ID,
+			"provider", provider,
+			"email_sent", emailSent,
+		)
+
+		// 검증 필요 응답 반환
+		return nil, errors.NewConflictErrorWithData(
+			errors.ErrCodeSocialLinkVerificationRequired,
+			"Account verification required to link social account",
+			map[string]interface{}{
+				"link_token":  linkToken,
+				"email":       email,
+				"provider":    provider,
+				"email_sent":  emailSent,
+				"has_password": user.PasswordHash != nil,
+			},
+		)
 	}
 
 	// UserNotFound가 아닌 다른 에러면 반환
@@ -496,6 +532,144 @@ func (s *authService) VerifyEmail(token string) error {
 
 	slog.Info("Email verified successfully", "user_id", verification.UserID)
 	return nil
+}
+
+// ConfirmSocialLinkByPassword 비밀번호로 소셜 연동 확인
+func (s *authService) ConfirmSocialLinkByPassword(linkToken, password string) (*AuthResponse, error) {
+	slog.Info("Social link confirmation by password attempt")
+
+	// PendingSocialLink 조회
+	pendingLink, err := s.userRepo.FindPendingSocialLinkByToken(linkToken)
+	if err != nil {
+		return nil, err
+	}
+
+	// 만료 확인
+	if time.Now().After(pendingLink.ExpiresAt) {
+		_ = s.userRepo.DeletePendingSocialLink(pendingLink.ID)
+		slog.Warn("Social link token expired", "link_id", pendingLink.ID)
+		return nil, errors.New(errors.ErrCodeSocialLinkExpired, "Social link token has expired", 400)
+	}
+
+	// 유저 조회
+	user, err := s.userRepo.FindByID(pendingLink.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 비밀번호 검증 (소셜 전용 계정인 경우 비밀번호 없음)
+	if user.PasswordHash == nil {
+		slog.Warn("Social link failed: user has no password", "user_id", user.ID)
+		return nil, errors.New(errors.ErrCodeSocialLinkInvalidPassword,
+			"This account has no password. Please use email verification.", 400)
+	}
+
+	if err := utils.CheckPassword(*user.PasswordHash, password); err != nil {
+		slog.Warn("Social link failed: invalid password", "user_id", user.ID)
+		return nil, errors.New(errors.ErrCodeSocialLinkInvalidPassword, "Invalid password", 401)
+	}
+
+	// 소셜 계정 연동 및 pending link 삭제
+	err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
+		newSocialAccount := &models.SocialAccount{
+			UserID:   user.ID,
+			Provider: pendingLink.Provider,
+			SocialID: pendingLink.SocialID,
+			Email:    pendingLink.Email,
+		}
+
+		if err := txRepo.CreateSocialAccount(newSocialAccount); err != nil {
+			return err
+		}
+
+		if !user.EmailVerified {
+			if err := txRepo.UpdateEmailVerified(user.ID); err != nil {
+				return err
+			}
+			user.EmailVerified = true
+		}
+
+		if err := txRepo.DeletePendingSocialLink(pendingLink.ID); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		slog.Error("Failed to confirm social link", "error", err)
+		return nil, errors.NewInternalError(errors.ErrCodeSocialLinkFailed, "Failed to link social account", err)
+	}
+
+	slog.Info("Social account linked successfully via password",
+		"user_id", user.ID,
+		"provider", pendingLink.Provider,
+	)
+
+	return s.generateTokens(user)
+}
+
+// ConfirmSocialLinkByEmailToken 이메일 토큰으로 소셜 연동 확인
+func (s *authService) ConfirmSocialLinkByEmailToken(emailToken string) (*AuthResponse, error) {
+	slog.Info("Social link confirmation by email token attempt")
+
+	// PendingSocialLink 조회
+	pendingLink, err := s.userRepo.FindPendingSocialLinkByEmailToken(emailToken)
+	if err != nil {
+		return nil, err
+	}
+
+	// 만료 확인
+	if time.Now().After(pendingLink.ExpiresAt) {
+		_ = s.userRepo.DeletePendingSocialLink(pendingLink.ID)
+		slog.Warn("Social link email token expired", "link_id", pendingLink.ID)
+		return nil, errors.New(errors.ErrCodeSocialLinkExpired, "Social link token has expired", 400)
+	}
+
+	// 유저 조회
+	user, err := s.userRepo.FindByID(pendingLink.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 소셜 계정 연동 및 pending link 삭제
+	err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
+		newSocialAccount := &models.SocialAccount{
+			UserID:   user.ID,
+			Provider: pendingLink.Provider,
+			SocialID: pendingLink.SocialID,
+			Email:    pendingLink.Email,
+		}
+
+		if err := txRepo.CreateSocialAccount(newSocialAccount); err != nil {
+			return err
+		}
+
+		if !user.EmailVerified {
+			if err := txRepo.UpdateEmailVerified(user.ID); err != nil {
+				return err
+			}
+			user.EmailVerified = true
+		}
+
+		if err := txRepo.DeletePendingSocialLink(pendingLink.ID); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		slog.Error("Failed to confirm social link via email", "error", err)
+		return nil, errors.NewInternalError(errors.ErrCodeSocialLinkFailed, "Failed to link social account", err)
+	}
+
+	slog.Info("Social account linked successfully via email token",
+		"user_id", user.ID,
+		"provider", pendingLink.Provider,
+	)
+
+	return s.generateTokens(user)
 }
 
 // 인증 이메일 재발송
