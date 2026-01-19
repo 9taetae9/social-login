@@ -15,6 +15,7 @@ type Config struct {
 	Email    EmailConfig
 	Oauth    OAuthConfig
 	App      AppConfig
+	Log      LogConfig
 }
 
 type ServerConfig struct {
@@ -62,6 +63,11 @@ type OAuthConfig struct {
 type AppConfig struct {
 	URL         string
 	FrontendURL string
+}
+
+type LogConfig struct {
+	Level  string // DEBUG, INFO, WARN, ERROR
+	Format string // console, json
 }
 
 func Load() *Config {
@@ -114,6 +120,10 @@ func Load() *Config {
 		App: AppConfig{
 			URL:         getEnv("APP_URL", "http://localhost:8080"),
 			FrontendURL: getEnv("FRONTEND_URL", "http://localhost:3000"),
+		},
+		Log: LogConfig{
+			Level:  getEnv("LOG_LEVEL", "INFO"),
+			Format: getEnv("LOG_FORMAT", "console"),
 		},
 	}
 }
