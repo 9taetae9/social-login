@@ -2,10 +2,12 @@ package main
 
 import (
 	"log"
+	"log/slog"
 
 	"github.com/9taetae9/social-login/internal/config"
 	"github.com/9taetae9/social-login/internal/database"
 	"github.com/9taetae9/social-login/internal/handler"
+	"github.com/9taetae9/social-login/internal/logger"
 	"github.com/9taetae9/social-login/internal/middleware"
 	"github.com/9taetae9/social-login/internal/repository"
 	"github.com/9taetae9/social-login/internal/service"
@@ -16,8 +18,13 @@ func main() {
 	// 설정 로드
 	cfg := config.Load()
 
+	// 로거 초기화
+	logger.InitLogger(cfg.Log.Level, cfg.Log.Format)
+	slog.Info("Starting application", "version", "1.0.0")
+
 	// MariaDB 연결
 	if err := database.Connect(cfg); err != nil {
+		slog.Error("Failed to connect to database", "error", err)
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer database.Close()
@@ -32,6 +39,9 @@ func main() {
 
 	// Gin 라우터 설정
 	router := gin.Default()
+
+	// 로깅 미들웨어 (CORS보다 먼저)
+	router.Use(logger.Middleware())
 
 	//CORS 미들웨어
 	router.Use(func(c *gin.Context) {
@@ -95,8 +105,9 @@ func main() {
 	})
 
 	addr := ":" + cfg.Server.Port
-	log.Printf("Server starting on %s", addr)
+	slog.Info("Server starting", "address", addr)
 	if err := router.Run(addr); err != nil {
+		slog.Error("Failed to start server", "error", err)
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
