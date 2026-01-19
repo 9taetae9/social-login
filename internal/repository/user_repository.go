@@ -38,6 +38,13 @@ type UserRepository interface {
 
 	// 트랜잭션 헬퍼 메서드 - 트랜잭션이 적용된 Repo를 인자로 넘겨줌
 	WithTrx(fn func(txRepo UserRepository) error) error
+
+	// PendingSocialLink 관련
+	CreatePendingSocialLink(link *models.PendingSocialLink) error
+	FindPendingSocialLinkByToken(linkToken string) (*models.PendingSocialLink, error)
+	FindPendingSocialLinkByEmailToken(emailToken string) (*models.PendingSocialLink, error)
+	DeletePendingSocialLink(id uint) error
+	DeletePendingSocialLinksByUserID(userID uint) error
 }
 
 type userRepository struct {
@@ -247,4 +254,65 @@ func (r *userRepository) WithTrx(fn func(txRepo UserRepository) error) error {
 		// 비지니스 로직 실행 (여기서 에러 반환 시 자동 Rollback)
 		return fn(txRepo)
 	})
+}
+
+// PendingSocialLink 생성
+func (r *userRepository) CreatePendingSocialLink(link *models.PendingSocialLink) error {
+	err := r.db.Create(link).Error
+	if err != nil {
+		slog.Error("Failed to create pending social link", "error", err)
+		return errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to create pending social link", 500)
+	}
+	slog.Debug("Pending social link created", "link_id", link.ID, "user_id", link.UserID)
+	return nil
+}
+
+// LinkToken으로 PendingSocialLink 조회
+func (r *userRepository) FindPendingSocialLinkByToken(linkToken string) (*models.PendingSocialLink, error) {
+	var link models.PendingSocialLink
+	err := r.db.Where("link_token = ?", linkToken).First(&link).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrCodeSocialLinkNotFound, "Social link not found", 404)
+		}
+		slog.Error("Database error finding pending social link", "error", err)
+		return nil, errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to find pending social link", 500)
+	}
+	return &link, nil
+}
+
+// EmailToken으로 PendingSocialLink 조회
+func (r *userRepository) FindPendingSocialLinkByEmailToken(emailToken string) (*models.PendingSocialLink, error) {
+	var link models.PendingSocialLink
+	err := r.db.Where("email_token = ?", emailToken).First(&link).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrCodeSocialLinkNotFound, "Social link not found", 404)
+		}
+		slog.Error("Database error finding pending social link by email token", "error", err)
+		return nil, errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to find pending social link", 500)
+	}
+	return &link, nil
+}
+
+// PendingSocialLink 삭제
+func (r *userRepository) DeletePendingSocialLink(id uint) error {
+	err := r.db.Delete(&models.PendingSocialLink{}, id).Error
+	if err != nil {
+		slog.Error("Failed to delete pending social link", "error", err, "link_id", id)
+		return errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to delete pending social link", 500)
+	}
+	slog.Debug("Pending social link deleted", "link_id", id)
+	return nil
+}
+
+// 유저의 모든 PendingSocialLink 삭제
+func (r *userRepository) DeletePendingSocialLinksByUserID(userID uint) error {
+	err := r.db.Where("user_id = ?", userID).Delete(&models.PendingSocialLink{}).Error
+	if err != nil {
+		slog.Error("Failed to delete pending social links by user", "error", err, "user_id", userID)
+		return errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to delete pending social links", 500)
+	}
+	slog.Debug("Pending social links deleted for user", "user_id", userID)
+	return nil
 }
