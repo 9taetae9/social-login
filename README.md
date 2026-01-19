@@ -1,6 +1,6 @@
 # 🔐 Social Login Service
 
-Go 언어 기반의 이메일 및 소셜 로그인(Google, Naver) 인증 서비스입니다.
+Go 언어 기반의 이메일 및 소셜 로그인(Google, Naver, Kakao) 인증 서비스입니다.
 
 ## 📋 목차
 
@@ -19,12 +19,13 @@ Go 언어 기반의 이메일 및 소셜 로그인(Google, Naver) 인증 서비�
 
 ## 🎯 프로젝트 개요
 
-이메일 기반 회원가입/로그인과 소셜 로그인(Google, Naver)을 지원하는 RESTful API 인증 서비스입니다. JWT 기반 토큰 인증을 사용하며, 소셜 계정 자동 통합 기능을 제공합니다.
+이메일 기반 회원가입/로그인과 소셜 로그인(Google, Naver, Kakao)을 지원하는 RESTful API 인증 서비스입니다. JWT 기반 토큰 인증을 사용하며, 소셜 계정 자동 통합 기능을 제공합니다. 내국인과 외국인을 구분하여 회원가입을 처리하며, 한국인의 경우 전화번호 인증을 필수로 합니다.
 
 ### 핵심 기능 하이라이트
 
-- **다중 소셜 로그인 지원**: 한 계정에 여러 소셜 계정 연동 가능 (1:N 구조)
-- **자동 계정 통합**: 동일 이메일로 소셜 로그인 시 기존 계정 자동 연동
+- **다중 소셜 로그인 지원**: 한 계정에 여러 소셜 계정 연동 가능 (Google, Naver, Kakao)
+- **자동 계정 통합**: 동일 이메일로 소셜 로그인 시 기존 계정 자동 연동 (1:N 구조)
+- **내국인/외국인 구분**: 회원 유형에 따른 차별화된 회원가입 (전화번호 필수 여부)
 - **트랜잭션 보장**: GORM 트랜잭션으로 데이터 일관성 보장
 - **CSRF 방지**: OAuth2 State 파라미터 암호화 검증
 
@@ -45,22 +46,28 @@ Go 언어 기반의 이메일 및 소셜 로그인(Google, Naver) 인증 서비�
 ### 3. 소셜 로그인
 - **Google OAuth2**: OpenID Connect
 - **Naver OAuth2**: Naver Login API
+- **Kakao OAuth2**: Kakao Login API
 - 3가지 시나리오 자동 처리:
   1. 기존 소셜 계정 로그인
   2. 기존 이메일 계정에 소셜 연동 (자동 통합)
   3. 신규 소셜 회원가입
 
-### 4. 비밀번호 보안
+### 4. 내국인/외국인 회원 구분
+- **회원 유형**: KOREAN (내국인), FOREIGNER (외국인)
+- **전화번호 인증**: 한국인 회원가입 시 필수
+- **국가 코드 지원**: 다국적 사용자 지원
+
+### 5. 비밀번호 보안
 - bcrypt 해싱 (cost 10)
 - 최소 8자 이상 검증
 
 ## 🛠 기술 스택
 
 ### Backend
-- **언어**: Go 1.21+
+- **언어**: Go 1.24+
 - **프레임워크**: Gin (HTTP 웹 프레임워크)
 - **ORM**: GORM
-- **데이터베이스**: MariaDB 10.3.34
+- **데이터베이스**: MariaDB 10.3+
 
 ### 주요 라이브러리
 | 라이브러리 | 용도 |
@@ -118,24 +125,26 @@ JWT 토큰 발급 (Access + Refresh)
 
 #### 소셜 로그인 플로우
 ```
-소셜 로그인 시작 (GET /google|naver/login)
+소셜 로그인 시작 (GET /google|naver|kakao/login)
    ↓
-OAuth2 제공자로 리다이렉트
+OAuth2 제공자로 리다이렉트 (Google/Naver/Kakao)
    ↓
 사용자 인증 및 동의
    ↓
-콜백 처리 (GET /google|naver/callback)
+콜백 처리 (GET /google|naver|kakao/callback)
+   ↓
+State 파라미터 검증 (CSRF 방지)
    ↓
 Authorization Code → Access Token 교환
    ↓
-유저 정보 조회
+유저 정보 조회 (이메일, 소셜 ID)
    ↓
 SocialLogin 서비스 호출
    ├─ [Case 1] 기존 소셜 계정 → 로그인
    ├─ [Case 2] 기존 이메일 계정 → 소셜 연동 (트랜잭션)
    └─ [Case 3] 신규 회원 → 계정 생성 (트랜잭션)
    ↓
-JWT 토큰 발급
+JWT 토큰 발급 (Access + Refresh)
 ```
 
 ## 🗃 데이터베이스 스키마
@@ -143,19 +152,81 @@ JWT 토큰 발급
 ### ERD 개요
 
 ```
-┌─────────────┐         ┌────────────────────┐
-│    users    │◄────────│  social_accounts   │ (1:N)
-└─────────────┘         └────────────────────┘
+┌─────────────────────────┐
+│        users            │
+│  - id (PK)              │
+│  - email (UNIQUE)       │
+│  - password_hash        │
+│  - user_type            │ (KOREAN/FOREIGNER)
+│  - phone_number         │ (한국인 필수)
+│  - country_code         │
+│  - email_verified       │
+└─────────────────────────┘
+      │
+      │ (1:N)
+      ├─────────────►┌────────────────────────┐
+      │              │  social_accounts       │
+      │              │  - id (PK)             │
+      │              │  - user_id (FK)        │
+      │              │  - provider            │
+      │              │  - social_id           │
+      │              │  - email               │
+      │              └────────────────────────┘
       │
       │ (1:N)
       ├─────────────►┌────────────────────────┐
       │              │  email_verifications   │
       │              └────────────────────────┘
       │
+      │ (1:N)
+      ├─────────────►┌────────────────────────┐
+      │              │    refresh_tokens      │
+      │              └────────────────────────┘
+      │
       └─────────────►┌────────────────────────┐
-                     │    refresh_tokens      │
+                     │  sms_verifications     │
+                     │  (전화번호 인증)        │
                      └────────────────────────┘
 ```
+
+### 테이블 상세
+
+#### users 테이블
+| 컬럼 | 타입 | 제약 | 설명 |
+|------|------|------|------|
+| id | INT | PK, AUTO_INCREMENT | 사용자 고유 ID |
+| email | VARCHAR(255) | UNIQUE, NOT NULL | 이메일 |
+| password_hash | VARCHAR(255) | NULL | 비밀번호 해시 (소셜 로그인 시 NULL) |
+| user_type | VARCHAR(20) | NULL | KOREAN/FOREIGNER |
+| phone_number | VARCHAR(20) | UNIQUE, NULL | 전화번호 (한국인 필수) |
+| country_code | VARCHAR(5) | NULL | 국가 코드 |
+| email_verified | BOOLEAN | DEFAULT FALSE | 이메일 인증 여부 |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 생성 시각 |
+| updated_at | TIMESTAMP | ON UPDATE CURRENT_TIMESTAMP | 수정 시각 |
+
+#### social_accounts 테이블
+| 컬럼 | 타입 | 제약 | 설명 |
+|------|------|------|------|
+| id | INT | PK, AUTO_INCREMENT | 고유 ID |
+| user_id | INT | FK, NOT NULL | users.id |
+| provider | VARCHAR(20) | NOT NULL | google/naver/kakao |
+| social_id | VARCHAR(255) | NOT NULL | 소셜 플랫폼 고유 ID |
+| email | VARCHAR(255) | NULL | 소셜 계정 이메일 |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 생성 시각 |
+
+**제약 조건:**
+- UNIQUE INDEX: (provider, social_id) - 동일 제공자 내 중복 방지
+- UNIQUE INDEX: (user_id, provider) - 한 유저가 같은 제공자를 중복 연동 불가
+
+#### sms_verifications 테이블
+| 컬럼 | 타입 | 제약 | 설명 |
+|------|------|------|------|
+| id | INT | PK, AUTO_INCREMENT | 고유 ID |
+| phone_number | VARCHAR(20) | NOT NULL | 전화번호 |
+| code | VARCHAR(6) | NOT NULL | 인증 코드 (6자리) |
+| verified | BOOLEAN | DEFAULT FALSE | 인증 완료 여부 |
+| expires_at | TIMESTAMP | NOT NULL | 만료 시각 |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 생성 시각 |
 
 ## 🌐 API 엔드포인트
 
@@ -192,6 +263,12 @@ http://localhost:8080/api/v1
 | GET | `/auth/naver/login` | Naver 로그인 시작 | ❌ |
 | GET | `/auth/naver/callback` | Naver 콜백 처리 | ❌ |
 
+#### Kakao 소셜 로그인
+| Method | Endpoint | 설명 | 인증 필요 |
+|--------|----------|------|----------|
+| GET | `/auth/kakao/login` | Kakao 로그인 시작 | ❌ |
+| GET | `/auth/kakao/callback` | Kakao 콜백 처리 | ❌ |
+
 #### 보호된 라우트
 | Method | Endpoint | 설명 | 인증 필요 |
 |--------|----------|------|----------|
@@ -199,14 +276,28 @@ http://localhost:8080/api/v1
 
 ### 요청/응답 예시
 
-#### 회원가입
+#### 회원가입 (내국인)
 ```bash
 POST /api/v1/auth/register
 Content-Type: application/json
 
 {
   "email": "user@example.com",
-  "password": "password123"
+  "password": "password123",
+  "user_type": "KOREAN",
+  "phone_number": "01012345678"
+}
+```
+
+#### 회원가입 (외국인)
+```bash
+POST /api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "foreigner@example.com",
+  "password": "password123",
+  "user_type": "FOREIGNER"
 }
 ```
 
@@ -217,6 +308,9 @@ Content-Type: application/json
   "user": {
     "id": 1,
     "email": "user@example.com",
+    "user_type": "KOREAN",
+    "phone_number": "01012345678",
+    "country_code": "KR",
     "email_verified": false,
     "created_at": "2024-01-14T10:00:00Z"
   }
@@ -244,7 +338,11 @@ Content-Type: application/json
     "user": {
       "id": 1,
       "email": "user@example.com",
-      "email_verified": true
+      "user_type": "KOREAN",
+      "phone_number": "01012345678",
+      "country_code": "KR",
+      "email_verified": true,
+      "social_accounts": []
     }
   }
 }
@@ -261,15 +359,18 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 {
   "user_id": 1,
   "email": "user@example.com",
+  "user_type": "KOREAN",
+  "phone_number": "01012345678",
+  "country_code": "KR",
   "message": "This is a protected route"
 }
 ```
 
 ## 🚀 설치 및 실행
 
-### 버전
+### 필수 요구사항
 
-- Go 1.21 이상
+- Go 1.24 이상
 - MariaDB 10.3 이상
 - Git
 
@@ -323,6 +424,16 @@ SOURCE database/schema.sql;
 3. 제공 정보: 이메일, 이름 선택
 4. 클라이언트 ID와 Secret을 `.env`에 입력
 
+#### Kakao Login
+1. [카카오 개발자센터](https://developers.kakao.com/) 접속
+2. 애플리케이션 추가
+   - 앱 이름: 원하는 이름
+3. 앱 설정
+   - "카카오 로그인" 활성화
+   - Redirect URI: `http://localhost:8080/api/v1/auth/kakao/callback`
+   - 동의 항목: 이메일 (필수)
+4. REST API 키를 `.env`에 입력
+
 ### 5. 서버 실행
 
 ```bash
@@ -369,6 +480,9 @@ Server starting on :8080
 | `NAVER_CLIENT_ID` | Naver 애플리케이션 클라이언트 ID |
 | `NAVER_CLIENT_SECRET` | Naver 애플리케이션 클라이언트 Secret |
 | `NAVER_REDIRECT_URL` | Naver 콜백 URL |
+| `KAKAO_CLIENT_ID` | Kakao REST API 키 |
+| `KAKAO_CLIENT_SECRET` | Kakao 클라이언트 Secret (선택) |
+| `KAKAO_REDIRECT_URL` | Kakao 콜백 URL |
 
 ## 📁 디렉토리 구조
 
@@ -409,10 +523,11 @@ social-login/
 ### 주요 파일 설명
 
 - **`cmd/server/main.go`**: 서버 시작점, 라우터 설정, 의존성 주입
-- **`internal/handler/auth_handler.go`**: HTTP 요청 처리 및 응답
+- **`internal/handler/auth_handler.go`**: HTTP 요청 처리 및 응답 (Google, Naver, Kakao 콜백 포함)
 - **`internal/service/auth_service.go`**: 비즈니스 로직 (회원가입, 로그인, 소셜 로그인)
 - **`internal/repository/user_repository.go`**: 데이터베이스 CRUD 작업
 - **`internal/middleware/auth_middleware.go`**: JWT 토큰 검증 미들웨어
+- **`internal/models/user.go`**: User, SocialAccount, EmailVerification, RefreshToken 모델 정의
 - **`database/schema.sql`**: 데이터베이스 테이블 생성 SQL
 
 ## 🧪 테스트 방법
@@ -430,22 +545,39 @@ go run cmd/server/main.go
 
 웹 UI에서 다음 기능을 테스트할 수 있습니다:
 - ✅ Health Check
-- ✅ 이메일 회원가입
+- ✅ 이메일 회원가입 (내국인/외국인)
 - ✅ 이메일 인증
 - ✅ 로그인
 - ✅ Google 소셜 로그인
 - ✅ Naver 소셜 로그인
+- ✅ Kakao 소셜 로그인
 - ✅ 토큰 갱신
 - ✅ 로그아웃
 - ✅ 보호된 라우트 접근
 
 ### 2. cURL 테스트
 
-#### 회원가입
+#### 회원가입 (내국인)
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
+  -d '{
+    "email":"korean@example.com",
+    "password":"password123",
+    "user_type":"KOREAN",
+    "phone_number":"01012345678"
+  }'
+```
+
+#### 회원가입 (외국인)
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email":"foreigner@example.com",
+    "password":"password123",
+    "user_type":"FOREIGNER"
+  }'
 ```
 
 #### 로그인
@@ -519,12 +651,13 @@ Postman 컬렉션을 사용하여 모든 API를 테스트할 수 있습니다.
 ## 🔧 향후 개선 사항
 
 ### 기능 추가
-- [ ] **카카오 소셜 로그인** 추가
+- [ ] **SMS 인증 구현**: 전화번호 인증 기능
 - [ ] **비밀번호 찾기/재설정** 기능
 - [ ] **회원 탈퇴** 기능
 - [ ] **프로필 이미지 업로드**
 - [ ] **이메일 변경** 기능
 - [ ] **소셜 계정 연동 해제**
+- [ ] **Apple 소셜 로그인** 추가
 
 ### 보안 강화
 - [ ] **Rate Limiting**: 로그인 시도 횟수 제한
