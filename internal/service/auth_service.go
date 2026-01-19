@@ -1,16 +1,16 @@
 package service
 
 import (
-	"errors"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/9taetae9/social-login/internal/config"
+	"github.com/9taetae9/social-login/internal/errors"
+	"github.com/9taetae9/social-login/internal/logger"
 	"github.com/9taetae9/social-login/internal/models"
 	"github.com/9taetae9/social-login/internal/repository"
 	"github.com/9taetae9/social-login/internal/utils"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type RegisterResponse struct {
@@ -48,15 +48,31 @@ func NewAuthService(userRepo repository.UserRepository, cfg *config.Config) Auth
 
 // 회원가입
 func (s *authService) Register(email, password, userType, phoneNumber string) (*RegisterResponse, error) {
+	slog.Info("Registration attempt",
+		"email", logger.SanitizeEmail(email),
+		"user_type", userType,
+	)
+
 	// 이메일 중복 확인
 	existingUser, err := s.userRepo.FindByEmail(email)
 	if err == nil && existingUser != nil {
-		return nil, errors.New("email already exists")
+		slog.Warn("Registration failed: email already exists",
+			"email", logger.SanitizeEmail(email),
+		)
+		return nil, errors.NewConflictError(errors.ErrCodeEmailExists, "Email already exists")
+	}
+
+	// 404가 아닌 다른 에러면 그대로 반환
+	if err != nil {
+		if appErr, ok := err.(*errors.AppError); ok && appErr.Code != errors.ErrCodeUserNotFound {
+			return nil, err
+		}
 	}
 
 	hashedPassword, err := utils.HashPassword(password)
 	if err != nil {
-		return nil, errors.New("failed to hash password")
+		slog.Error("Failed to hash password", "error", err)
+		return nil, errors.NewInternalError(errors.ErrCodeHashPassword, "Failed to hash password", err)
 	}
 
 	uType := models.UserType(userType)
@@ -70,22 +86,36 @@ func (s *authService) Register(email, password, userType, phoneNumber string) (*
 	if models.UserType(userType) == models.UserTypeKorean {
 		existingPhone, err := s.userRepo.FindByPhoneNumber(phoneNumber)
 		if err == nil && existingPhone != nil {
-			return nil, errors.New("phone number already in use")
+			slog.Warn("Registration failed: phone already exists",
+				"phone", logger.SanitizePhone(phoneNumber),
+			)
+			return nil, errors.NewConflictError(errors.ErrCodePhoneExists, "Phone number already in use")
+		}
+
+		// 404가 아닌 다른 에러면 그대로 반환
+		if err != nil {
+			if appErr, ok := err.(*errors.AppError); ok && appErr.Code != errors.ErrCodeUserNotFound {
+				return nil, err
+			}
 		}
 
 		user.PhoneNumber = &phoneNumber
 		user.EmailVerified = true // 한국인은 인증된 것으로 간주
 		user.CountryCode = "KR"
+
+		slog.Info("Korean user registration", "email", logger.SanitizeEmail(email))
 	} else {
 		user.PhoneNumber = nil     // 외국인은 전화번호 없음
 		user.EmailVerified = false // 이메일 인증 필요
 		//user.CountryCode 외국인은 가입시 null 처리
 		fType := models.UserTypeForeigner
 		user.UserType = &fType
+
+		slog.Info("Foreigner user registration", "email", logger.SanitizeEmail(email))
 	}
 
 	if err := s.userRepo.Create(user); err != nil {
-		return nil, errors.New("failed to create user")
+		return nil, err // Repository에서 이미 AppError로 변환됨
 	}
 
 	if *user.UserType == models.UserTypeForeigner { // 외국인인 경우에만 인증 이메일 발송
@@ -98,7 +128,7 @@ func (s *authService) Register(email, password, userType, phoneNumber string) (*
 		}
 
 		if err := s.userRepo.CreateEmailVerification(emailVerification); err != nil {
-			return nil, errors.New("failed to create email verification")
+			return nil, err
 		}
 
 		// 인증 이메일 발송
@@ -111,8 +141,13 @@ func (s *authService) Register(email, password, userType, phoneNumber string) (*
 		}
 
 		if err := utils.SendVerificationEmail(email, verificationToken, s.cfg.App.URL, emailCfg); err != nil {
-			// 이메일 발송 실패는 로그만 남기고 계속 진행
-			log.Printf("Failed to send verification email: %v", err)
+			// 이메일 발송 실패는 경고만 (계속 진행)
+			slog.Warn("Failed to send verification email",
+				"error", err,
+				"email", logger.SanitizeEmail(email),
+			)
+		} else {
+			slog.Info("Verification email sent", "email", logger.SanitizeEmail(email))
 		}
 
 		return &RegisterResponse{
@@ -120,6 +155,11 @@ func (s *authService) Register(email, password, userType, phoneNumber string) (*
 			User:    user,
 		}, nil
 	}
+
+	slog.Info("Registration successful",
+		"user_id", user.ID,
+		"email", logger.SanitizeEmail(email),
+	)
 
 	return &RegisterResponse{
 		Message: "Registration successful. You can login immediately.",
@@ -129,53 +169,94 @@ func (s *authService) Register(email, password, userType, phoneNumber string) (*
 
 // 로그인
 func (s *authService) Login(email, password string) (*AuthResponse, error) {
+	slog.Info("Login attempt", "email", logger.SanitizeEmail(email))
+
 	// 사용자 조회
 	user, err := s.userRepo.FindByEmail(email)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("invalid email or password")
+		// Repository에서 UserNotFound 에러가 왔다면 인증 실패로 변환
+		if appErr, ok := err.(*errors.AppError); ok && appErr.Code == errors.ErrCodeUserNotFound {
+			slog.Warn("Login failed: user not found", "email", logger.SanitizeEmail(email))
+			return nil, errors.NewAuthError(errors.ErrCodeInvalidCredentials, "Invalid email or password")
 		}
-		return nil, errors.New("failed to find user")
+		return nil, err
 	}
 
 	if user.PasswordHash == nil {
-		return nil, errors.New("this account uses social login. please login in with social account")
+		slog.Warn("Login failed: social login account",
+			"email", logger.SanitizeEmail(email),
+			"user_id", user.ID,
+		)
+		return nil, errors.NewAuthError(errors.ErrCodeSocialLoginRequired,
+			"This account uses social login. Please login with social account")
 	}
 
 	// 비밀번호 검증
 	if err := utils.CheckPassword(*user.PasswordHash, password); err != nil {
-		return nil, errors.New("invalid email or password")
+		slog.Warn("Login failed: invalid password", "email", logger.SanitizeEmail(email))
+		return nil, errors.NewAuthError(errors.ErrCodeInvalidCredentials, "Invalid email or password")
 	}
 
 	// 이메일 인증 확인
 	if !user.EmailVerified {
-		return nil, errors.New("email not verified. please check your email and verify your account before logging in")
+		slog.Warn("Login failed: email not verified",
+			"email", logger.SanitizeEmail(email),
+			"user_id", user.ID,
+		)
+		return nil, errors.NewAuthError(errors.ErrCodeEmailNotVerified,
+			"Email not verified. Please check your email and verify your account before logging in")
 	}
+
+	slog.Info("Login successful",
+		"user_id", user.ID,
+		"email", logger.SanitizeEmail(email),
+	)
 
 	return s.generateTokens(user)
 }
 
 // 소셜 로그인
 func (s *authService) SocialLogin(email, provider, socialID string) (*AuthResponse, error) {
+	slog.Info("Social login attempt",
+		"email", logger.SanitizeEmail(email),
+		"provider", provider,
+	)
+
 	// 이미 소셜로 연동된 계정이 있는지 확인
 	socialAccount, err := s.userRepo.FindSocialAccount(provider, socialID)
 
 	if err == nil {
 		// [case 1] 이미 가입된 소셜 유저 -> 로그인 성공
+		slog.Info("Social login: existing social account found",
+			"provider", provider,
+			"user_id", socialAccount.UserID,
+		)
 		//GORM Preload를 사용 안했으면 별도 조회 필요
 		user, err := s.userRepo.FindByID(socialAccount.UserID)
 		if err != nil {
-			return nil, errors.New("linked user not found")
+			slog.Error("Failed to find linked user", "error", err, "user_id", socialAccount.UserID)
+			return nil, errors.NewInternalError(errors.ErrCodeUserNotFound, "Linked user not found", err)
 		}
+		slog.Info("Social login successful", "user_id", user.ID, "provider", provider)
 		return s.generateTokens(user)
+	}
+
+	// SocialAccount를 찾지 못한 경우가 아닌 다른 에러면 반환
+	if appErr, ok := err.(*errors.AppError); ok && appErr.Code != errors.ErrCodeSocialNotFound {
+		return nil, err
 	}
 
 	// 소셜 계정이 없다면, 이메일로 기존 가입자가 있는지 확인
 	user, err := s.userRepo.FindByEmail(email)
 	if err == nil {
+		// [case 2] 기존 이메일 가입자 존재 -> 계정 통합
+		slog.Info("Social login: linking to existing email account",
+			"email", logger.SanitizeEmail(email),
+			"provider", provider,
+			"user_id", user.ID,
+		)
+
 		err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
-			// [case 2] 기존 이메일 가입자 존재 -> 계정 통합 (Update)
-			// ** 보안 정책에 따라 비밀번호 확인을 요구할 수도 있음 (현재는 편의상 통합)
 			newSocialAccount := &models.SocialAccount{
 				UserID:   user.ID,
 				Provider: provider,
@@ -197,13 +278,27 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 		})
 
 		if err != nil {
-			return nil, errors.New("failed to link social account")
+			slog.Error("Failed to link social account", "error", err, "provider", provider)
+			return nil, errors.NewInternalError(errors.ErrCodeSocialLinkFailed, "Failed to link social account", err)
 		}
+
+		slog.Info("Social account linked successfully", "user_id", user.ID, "provider", provider)
 		return s.generateTokens(user)
 	}
 
+	// UserNotFound가 아닌 다른 에러면 반환
+	if err != nil {
+		if appErr, ok := err.(*errors.AppError); ok && appErr.Code != errors.ErrCodeUserNotFound {
+			return nil, err
+		}
+	}
+
 	// [case 3] 최초 가입자 -> User 생성 + SocialAccount 생성
-	// 트랜잭션 처리 구간
+	slog.Info("Social login: creating new user account",
+		"email", logger.SanitizeEmail(email),
+		"provider", provider,
+	)
+
 	newUser := &models.User{
 		Email:         email,
 		PasswordHash:  nil,
@@ -230,9 +325,11 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 	})
 
 	if err != nil {
-		return nil, errors.New("failed to create social user")
+		slog.Error("Failed to create social user", "error", err, "provider", provider)
+		return nil, errors.NewInternalError(errors.ErrCodeSocialCreateFailed, "Failed to create social user", err)
 	}
 
+	slog.Info("New social user created successfully", "user_id", newUser.ID, "provider", provider)
 	return s.generateTokens(newUser)
 }
 
@@ -245,7 +342,8 @@ func (s *authService) generateTokens(user *models.User) (*AuthResponse, error) {
 		s.cfg.JWT.AccessTokenExpiry,
 	)
 	if err != nil {
-		return nil, errors.New("failed to generate access token")
+		slog.Error("Failed to generate access token", "error", err, "user_id", user.ID)
+		return nil, errors.NewInternalError(errors.ErrCodeGenerateToken, "Failed to generate access token", err)
 	}
 
 	refreshToken, err := utils.GenerateAccessToken(
@@ -255,7 +353,8 @@ func (s *authService) generateTokens(user *models.User) (*AuthResponse, error) {
 		s.cfg.JWT.RefreshTokenExpiry,
 	)
 	if err != nil {
-		return nil, errors.New("failed to generate refresh token")
+		slog.Error("Failed to generate refresh token", "error", err, "user_id", user.ID)
+		return nil, errors.NewInternalError(errors.ErrCodeGenerateToken, "Failed to generate refresh token", err)
 	}
 
 	refreshTokenModel := &models.RefreshToken{
@@ -265,8 +364,10 @@ func (s *authService) generateTokens(user *models.User) (*AuthResponse, error) {
 	}
 
 	if err := s.userRepo.CreateRefreshToken(refreshTokenModel); err != nil {
-		return nil, errors.New("failed to save refresh token")
+		return nil, err // Repository에서 이미 AppError로 변환됨
 	}
+
+	slog.Debug("Tokens generated successfully", "user_id", user.ID)
 
 	return &AuthResponse{
 		AccessToken:  accessToken,
@@ -277,22 +378,22 @@ func (s *authService) generateTokens(user *models.User) (*AuthResponse, error) {
 
 // RefreshToken 갱신
 func (s *authService) RefreshToken(refreshToken string) (*AuthResponse, error) {
+	slog.Info("Token refresh attempt")
+
 	claims, err := utils.ValidateToken(refreshToken, s.cfg.JWT.Secret)
 	if err != nil {
-		return nil, errors.New("invalid refresh token")
+		slog.Warn("Invalid refresh token", "error", err)
+		return nil, errors.NewAuthError(errors.ErrCodeInvalidToken, "Invalid refresh token")
 	}
 
 	_, err = s.userRepo.FindRefreshTokenByToken(refreshToken)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("refresh token not found")
-		}
-		return nil, errors.New("failed to find refresh token")
+		return nil, err // Repository에서 이미 AppError로 변환됨
 	}
 
 	user, err := s.userRepo.FindByID(claims.UserID)
 	if err != nil {
-		return nil, errors.New("user not found")
+		return nil, err // Repository에서 이미 AppError로 변환됨
 	}
 
 	newAccessToken, err := utils.GenerateAccessToken(
@@ -302,7 +403,8 @@ func (s *authService) RefreshToken(refreshToken string) (*AuthResponse, error) {
 		s.cfg.JWT.AccessTokenExpiry,
 	)
 	if err != nil {
-		return nil, errors.New("failed to generate access token")
+		slog.Error("Failed to generate access token", "error", err)
+		return nil, errors.NewInternalError(errors.ErrCodeGenerateToken, "Failed to generate access token", err)
 	}
 
 	// 새로운 리프레시 토큰 생성
@@ -313,12 +415,13 @@ func (s *authService) RefreshToken(refreshToken string) (*AuthResponse, error) {
 		s.cfg.JWT.RefreshTokenExpiry,
 	)
 	if err != nil {
-		return nil, errors.New("failed to generate refresh token")
+		slog.Error("Failed to generate refresh token", "error", err)
+		return nil, errors.NewInternalError(errors.ErrCodeGenerateToken, "Failed to generate refresh token", err)
 	}
 
 	// 기존 리프레시 토큰 삭제
 	if err := s.userRepo.DeleteRefreshToken(refreshToken); err != nil {
-		return nil, errors.New("failed to delete old refresh token")
+		return nil, err // Repository에서 이미 AppError로 변환됨
 	}
 
 	// 새 리프레시 토큰 저장
@@ -329,8 +432,10 @@ func (s *authService) RefreshToken(refreshToken string) (*AuthResponse, error) {
 	}
 
 	if err := s.userRepo.CreateRefreshToken(newTokenModel); err != nil {
-		return nil, errors.New("failed to save refresh token")
+		return nil, err // Repository에서 이미 AppError로 변환됨
 	}
+
+	slog.Info("Token refreshed successfully", "user_id", user.ID)
 
 	return &AuthResponse{
 		AccessToken:  newAccessToken,
@@ -341,68 +446,74 @@ func (s *authService) RefreshToken(refreshToken string) (*AuthResponse, error) {
 
 // 로그아웃
 func (s *authService) Logout(refreshToken string) error {
+	slog.Info("Logout attempt")
+
 	// 리프레시 토큰 검증
 	_, err := utils.ValidateToken(refreshToken, s.cfg.JWT.Secret)
 	if err != nil {
-		return errors.New("invalid refresh token")
+		slog.Warn("Invalid refresh token for logout", "error", err)
+		return errors.NewAuthError(errors.ErrCodeInvalidToken, "Invalid refresh token")
 	}
 
 	// 리프레시 토큰 삭제
 	if err := s.userRepo.DeleteRefreshToken(refreshToken); err != nil {
-		return errors.New("failed to delete refresh token")
+		return err // Repository에서 이미 AppError로 변환됨
 	}
 
+	slog.Info("Logout successful")
 	return nil
 }
 
 // 이메일 인증
 func (s *authService) VerifyEmail(token string) error {
+	slog.Info("Email verification attempt")
+
 	// 이메일 인증 토큰 조회
 	verification, err := s.userRepo.FindEmailVerificationByToken(token)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("invalid or expire verification token")
-		}
-		return errors.New("failed to find verification token")
+		return err // Repository에서 이미 AppError로 변환됨
 	}
 
 	// 토큰 만료 확인
 	if time.Now().After(verification.ExpiresAt) {
-		return errors.New("verification token has expired")
+		slog.Warn("Verification token expired")
+		return errors.NewAuthError(errors.ErrCodeVerificationExpired, "Verification token has expired")
 	}
 
 	// 이미 인증된 토큰인지 확인
 	if verification.Verified {
-		return errors.New("email already verified")
+		slog.Warn("Email already verified", "user_id", verification.UserID)
+		return errors.New(errors.ErrCodeEmailAlreadyVerified, "Email already verified", 400)
 	}
 
 	// users 테이블의 email_verified를 true로 업데이트
 	if err := s.userRepo.UpdateEmailVerified(verification.UserID); err != nil {
-		return errors.New("failed to update email verification status")
+		return err // Repository에서 이미 AppError로 변환됨
 	}
 
 	// 인증 토큰을 인증됨으로 표시
 	if err := s.userRepo.MarkEmailVerificationAsUsed(verification.ID); err != nil {
-		return errors.New("failed to mark verification as used")
+		return err // Repository에서 이미 AppError로 변환됨
 	}
 
+	slog.Info("Email verified successfully", "user_id", verification.UserID)
 	return nil
 }
 
 // 인증 이메일 재발송
 func (s *authService) ResendVerificationEmail(email string) error {
+	slog.Info("Resend verification email attempt", "email", logger.SanitizeEmail(email))
+
 	// 사용자 조회
 	user, err := s.userRepo.FindByEmail(email)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("user not found")
-		}
-		return errors.New("failed to find user")
+		return err // Repository에서 이미 AppError로 변환됨
 	}
 
 	// 이미 인증된 사용자인지 확인
 	if user.EmailVerified {
-		return errors.New("email already verified")
+		slog.Warn("Email already verified", "user_id", user.ID)
+		return errors.New(errors.ErrCodeEmailAlreadyVerified, "Email already verified", 400)
 	}
 
 	// 새로운 인증 토큰 생성
@@ -415,7 +526,7 @@ func (s *authService) ResendVerificationEmail(email string) error {
 	}
 
 	if err := s.userRepo.CreateEmailVerification(emailVerification); err != nil {
-		return errors.New("failed to create email verification")
+		return err // Repository에서 이미 AppError로 변환됨
 	}
 
 	emailCfg := utils.EmailConfig{
@@ -427,8 +538,10 @@ func (s *authService) ResendVerificationEmail(email string) error {
 	}
 
 	if err := utils.SendVerificationEmail(user.Email, verificationToken, s.cfg.App.URL, emailCfg); err != nil {
-		return errors.New("failed to send verification email")
+		slog.Error("Failed to send verification email", "error", err, "email", logger.SanitizeEmail(email))
+		return errors.NewInternalError(errors.ErrCodeEmailSendFailed, "Failed to send verification email", err)
 	}
 
+	slog.Info("Verification email resent successfully", "email", logger.SanitizeEmail(email))
 	return nil
 }
