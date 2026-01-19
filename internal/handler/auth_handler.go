@@ -7,9 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/9taetae9/social-login/internal/config"
+	"github.com/9taetae9/social-login/internal/errors"
+	"github.com/9taetae9/social-login/internal/logger"
 	"github.com/9taetae9/social-login/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -106,27 +109,38 @@ type KakaoUserInfo struct {
 
 // 회원가입 핸들러
 func (h *AuthHandler) Register(c *gin.Context) {
+	requestID := logger.GetRequestID(c)
+
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		slog.Warn("Invalid request body",
+			"request_id", requestID,
+			"error", err,
+		)
+		errors.HandleError(c, errors.NewValidationError("Invalid request body"))
 		return
 	}
 
 	//유효성 검증
 	if err := h.validate.Struct(req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		slog.Warn("Validation failed",
+			"request_id", requestID,
+			"error", err,
+		)
+		errors.HandleError(c, errors.NewValidationError(err.Error()))
 		return
 	}
 
 	if req.UserType == "KOREAN" && req.PhoneNumber == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Phone number is required for Korean users"})
+		errors.HandleError(c, errors.New(errors.ErrCodePhoneRequired,
+			"Phone number is required for Korean users", 400))
 		return
 	}
 
 	// 회원가입 처리
 	response, err := h.authService.Register(req.Email, req.Password, req.UserType, req.PhoneNumber)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, err)
 		return
 	}
 
@@ -136,22 +150,32 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 // 로그인 핸들러
 func (h *AuthHandler) Login(c *gin.Context) {
+	requestID := logger.GetRequestID(c)
+
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		slog.Warn("Invalid request body",
+			"request_id", requestID,
+			"error", err,
+		)
+		errors.HandleError(c, errors.NewValidationError("Invalid request body"))
 		return
 	}
 
 	// 유효성 검증
 	if err := h.validate.Struct(req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		slog.Warn("Validation failed",
+			"request_id", requestID,
+			"error", err,
+		)
+		errors.HandleError(c, errors.NewValidationError(err.Error()))
 		return
 	}
 
 	// 로그인 처리
 	response, err := h.authService.Login(req.Email, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, err)
 		return
 	}
 
@@ -256,7 +280,7 @@ func (h *AuthHandler) GoogleCallback(c *gin.Context) {
 	// Service 계층의 SocialLogin 호출
 	authResponse, err := h.authService.SocialLogin(googleUser.Email, "google", googleUser.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, err)
 		return
 	}
 
@@ -376,7 +400,7 @@ func (h *AuthHandler) NaverCallback(c *gin.Context) {
 	// Service 계층의 SocialLogin 호출
 	authResponse, err := h.authService.SocialLogin(naverUser.Response.Email, "naver", naverUser.Response.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, err)
 		return
 	}
 
@@ -493,7 +517,7 @@ func (h *AuthHandler) KakaoCallback(c *gin.Context) {
 	// Service 계층의 SocialLogin 호출
 	authResponse, err := h.authService.SocialLogin(kakaoUser.KakaoAccount.Email, "kakao", kakaoID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, err)
 		return
 	}
 
@@ -507,19 +531,19 @@ func (h *AuthHandler) KakaoCallback(c *gin.Context) {
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	var req RefreshTokenReqeust
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		errors.HandleError(c, errors.NewValidationError("Invalid request body"))
 		return
 	}
 
 	// 유효성 검증
 	if err := h.validate.Struct(req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, errors.NewValidationError(err.Error()))
 		return
 	}
 
 	response, err := h.authService.RefreshToken(req.RefreshToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, err)
 		return
 	}
 
@@ -533,19 +557,19 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 func (h *AuthHandler) Logout(c *gin.Context) {
 	var req LogoutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		errors.HandleError(c, errors.NewValidationError("Invalid request body"))
 		return
 	}
 
 	// 유효성 검증
 	if err := h.validate.Struct(req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, errors.NewValidationError(err.Error()))
 		return
 	}
 
 	// 로그아웃 처리
 	if err := h.authService.Logout(req.RefreshToken); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, err)
 		return
 	}
 
@@ -558,13 +582,13 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Verification token is required"})
+		errors.HandleError(c, errors.NewValidationError("Verification token is required"))
 		return
 	}
 
 	// 이메일 인증 처리
 	if err := h.authService.VerifyEmail(token); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, err)
 		return
 	}
 
@@ -576,19 +600,19 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 func (h *AuthHandler) ResendVerificationEmail(c *gin.Context) {
 	var req ResendVerificationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		errors.HandleError(c, errors.NewValidationError("Invalid request body"))
 		return
 	}
 
 	// 유효성 검증
 	if err := h.validate.Struct(req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, errors.NewValidationError(err.Error()))
 		return
 	}
 
 	// 인증 이메일 재발송 처리
 	if err := h.authService.ResendVerificationEmail(req.Email); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		errors.HandleError(c, err)
 		return
 	}
 
