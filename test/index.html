@@ -41,22 +41,36 @@
 
         .card {
             background: white;
-            border-radius: 12px;
+            border-radius: 16px;
             padding: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            transition: transform 0.3s ease;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
         .card:hover {
             transform: translateY(-5px);
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.2);
         }
 
         .card h2 {
             color: #667eea;
             margin-bottom: 15px;
-            font-size: 1.5em;
+            font-size: 1.4em;
             border-bottom: 2px solid #667eea;
             padding-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-highlight {
+            border: 2px solid #ffc107;
+            background: linear-gradient(135deg, #fffef0 0%, #fff 100%);
+        }
+
+        .card-highlight h2 {
+            color: #f57c00;
+            border-bottom-color: #ffc107;
         }
 
         .form-group {
@@ -68,6 +82,7 @@
             margin-bottom: 5px;
             color: #333;
             font-weight: 600;
+            font-size: 0.9em;
         }
 
         input[type="text"],
@@ -75,17 +90,18 @@
         input[type="password"],
         textarea {
             width: 100%;
-            padding: 12px;
+            padding: 12px 15px;
             border: 2px solid #e0e0e0;
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 14px;
-            transition: border-color 0.3s ease;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
         }
 
         input:focus,
         textarea:focus {
             outline: none;
             border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
         textarea {
@@ -100,8 +116,8 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            border-radius: 8px;
-            font-size: 16px;
+            border-radius: 10px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -109,17 +125,22 @@
 
         button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
         }
 
         button:active {
             transform: translateY(0);
         }
 
-        /* 구글 로그인 버튼 전용 스타일 */
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         .btn-google {
             background: #DB4437;
-            /* Google Red */
             margin-top: 10px;
         }
 
@@ -128,10 +149,8 @@
             box-shadow: 0 5px 15px rgba(219, 68, 55, 0.4);
         }
 
-        /* 네이버 로그인 버튼 전용 스타일 */
         .btn-naver {
             background: #03C75A;
-            /* Naver Green */
             margin-top: 10px;
         }
 
@@ -140,12 +159,9 @@
             box-shadow: 0 5px 15px rgba(3, 199, 90, 0.4);
         }
 
-        /* 카카오 로그인 버튼 전용 스타일 (추가됨) */
         .btn-kakao {
             background: #FEE500;
-            /* Kakao Yellow */
             color: #000000;
-            /* 카카오는 글자가 검은색이 표준 */
             margin-top: 10px;
         }
 
@@ -163,17 +179,44 @@
             box-shadow: 0 5px 15px rgba(108, 117, 125, 0.4);
         }
 
+        .btn-warning {
+            background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%);
+        }
+
+        .btn-warning:hover {
+            box-shadow: 0 5px 15px rgba(255, 152, 0, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #43a047 0%, #66bb6a 100%);
+        }
+
+        .btn-success:hover {
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #667eea;
+            color: #667eea;
+        }
+
+        .btn-outline:hover {
+            background: #667eea;
+            color: white;
+        }
+
         .response {
             background: white;
-            border-radius: 12px;
+            border-radius: 16px;
             padding: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
         }
 
         .response h2 {
             color: #667eea;
             margin-bottom: 15px;
-            font-size: 1.5em;
+            font-size: 1.4em;
         }
 
         #responseArea {
@@ -181,7 +224,7 @@
             min-height: 300px;
             padding: 15px;
             border: 2px solid #e0e0e0;
-            border-radius: 8px;
+            border-radius: 10px;
             font-family: 'Courier New', monospace;
             font-size: 13px;
             background: #f8f9fa;
@@ -190,31 +233,33 @@
         }
 
         .token-display {
-            background: #fff3cd;
-            /* 노란색 배경으로 강조 */
-            padding: 15px;
-            border-radius: 8px;
+            background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+            padding: 20px;
+            border-radius: 16px;
             margin-top: 15px;
-            border-left: 4px solid #ffc107;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid #4caf50;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.2);
         }
 
         .token-display h3 {
-            color: #856404;
+            color: #2e7d32;
             margin-bottom: 10px;
             font-size: 1.1em;
         }
 
         .token-display p {
-            color: #666;
+            color: #555;
             font-size: 12px;
             word-break: break-all;
-            margin: 5px 0;
+            margin: 8px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 6px;
         }
 
         .status {
             display: inline-block;
-            padding: 5px 15px;
+            padding: 6px 16px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
@@ -231,31 +276,36 @@
             color: #721c24;
         }
 
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
         .info-box {
-            background: #e7f3ff;
-            border-left: 4px solid #2196F3;
-            padding: 15px;
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            border-left: 5px solid #2196F3;
+            padding: 20px;
             margin: 20px 0;
-            border-radius: 4px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.15);
         }
 
         .info-box h3 {
-            color: #2196F3;
+            color: #1565c0;
             margin-bottom: 10px;
         }
 
         .info-box p {
             color: #333;
-            line-height: 1.6;
+            line-height: 1.8;
         }
 
         .divider {
             height: 1px;
-            background: #eee;
+            background: linear-gradient(90deg, transparent, #ddd, transparent);
             margin: 20px 0;
         }
 
-        /* 탭 스타일 */
         .tabs {
             display: flex;
             margin-bottom: 20px;
@@ -267,7 +317,7 @@
             padding: 10px;
             background: none;
             border: none;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
             color: #888;
             cursor: pointer;
@@ -288,133 +338,366 @@
             display: block;
         }
 
-        /* 안내 문구 스타일 */
         .hint-text {
             font-size: 0.85em;
             color: #666;
             margin-top: 5px;
             margin-bottom: 15px;
             background-color: #f8f9fa;
-            padding: 8px;
-            border-radius: 4px;
+            padding: 10px 12px;
+            border-radius: 8px;
             border-left: 3px solid #667eea;
         }
 
-        /* --- [추가] 모달(팝업) 스타일 --- */
+        /* 모달 스타일 */
         .modal {
             display: none;
-            /* 기본적으로 숨김 */
             position: fixed;
             z-index: 1000;
             left: 0;
             top: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            /* 반투명 검은 배경 */
+            background-color: rgba(0, 0, 0, 0.6);
             animation: fadeIn 0.3s;
+            backdrop-filter: blur(3px);
         }
 
         .modal-content {
             background-color: #fff;
-            margin: 15% auto;
-            /* 화면 상단에서 15% 위치 */
-            padding: 25px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 500px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            margin: 8% auto;
+            padding: 30px;
+            border: none;
+            width: 90%;
+            max-width: 520px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             text-align: center;
             position: relative;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
 
         .modal-header {
-            color: #721c24;
+            color: #333;
             margin-bottom: 15px;
-            font-size: 1.4em;
+            font-size: 1.5em;
             font-weight: bold;
+        }
+
+        .modal-header.warning {
+            color: #f57c00;
+        }
+
+        .modal-header.info {
+            color: #1976d2;
+        }
+
+        .modal-header.error {
+            color: #d32f2f;
         }
 
         .modal-body {
             color: #333;
-            font-size: 1.1em;
-            margin-bottom: 25px;
-            word-break: break-all;
+            font-size: 1em;
+            margin-bottom: 20px;
+            word-break: break-word;
+            line-height: 1.6;
+            text-align: left;
         }
 
         .close-btn {
             position: absolute;
-            top: 10px;
-            right: 15px;
+            top: 15px;
+            right: 20px;
             color: #aaa;
-            font-size: 24px;
+            font-size: 28px;
             font-weight: bold;
             cursor: pointer;
+            transition: color 0.2s;
         }
 
         .close-btn:hover {
-            color: black;
+            color: #333;
         }
 
         .modal-confirm-btn {
-            background: #721c24;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            padding: 10px 25px;
-            border-radius: 6px;
+            padding: 12px 30px;
+            border-radius: 10px;
             font-size: 1em;
+            font-weight: 600;
             cursor: pointer;
-            transition: background 0.3s;
+            transition: all 0.3s;
         }
 
         .modal-confirm-btn:hover {
-            background: #5a161d;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .modal-confirm-btn.error {
+            background: linear-gradient(135deg, #d32f2f 0%, #f44336 100%);
         }
 
         @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* 연동 확인 모달 전용 스타일 */
+        .link-modal .modal-content {
+            max-width: 500px;
+            text-align: left;
+        }
+
+        .link-modal .modal-header {
+            text-align: center;
+            color: #f57c00;
+            margin-bottom: 20px;
+        }
+
+        .account-info-card {
+            background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ffc107;
+        }
+
+        .account-info-card h4 {
+            color: #f57c00;
+            margin-bottom: 12px;
+            font-size: 1em;
+        }
+
+        .account-info-card .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 0.9em;
+        }
+
+        .account-info-card .info-label {
+            color: #666;
+        }
+
+        .account-info-card .info-value {
+            color: #333;
+            font-weight: 600;
+        }
+
+        .verification-options {
+            margin-top: 20px;
+        }
+
+        .verification-option {
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .verification-option:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .verification-option.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #e8eaf6 0%, #f3e5f5 100%);
+        }
+
+        .verification-option h4 {
+            color: #333;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .verification-option p {
+            color: #666;
+            font-size: 0.85em;
+            margin: 0;
+        }
+
+        .verification-option .icon {
+            font-size: 1.5em;
+        }
+
+        .verification-option .badge-sent {
+            background: #4caf50;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            font-weight: 600;
+        }
+
+        .password-input-area {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px dashed #ddd;
+            display: none;
+        }
+
+        .password-input-area.active {
+            display: block;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn-group button {
+            flex: 1;
+        }
+
+        /* 배지 스타일 */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .badge-new {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ffa502 100%);
+            color: white;
+        }
+
+        /* 알림 토스트 */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #323232;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+            display: none;
+            animation: slideUp 0.3s ease-out;
+            z-index: 2000;
+        }
+
+        .toast.success {
+            background: linear-gradient(135deg, #43a047 0%, #66bb6a 100%);
+        }
+
+        .toast.error {
+            background: linear-gradient(135deg, #d32f2f 0%, #f44336 100%);
+        }
+
+        @keyframes slideUp {
             from {
+                transform: translateY(30px);
                 opacity: 0;
             }
-
             to {
+                transform: translateY(0);
                 opacity: 1;
             }
+        }
+
+        /* 이메일 확인 안내 */
+        .email-check-notice {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 15px 0;
+        }
+
+        .email-check-notice .icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .email-check-notice h4 {
+            color: #1565c0;
+            margin-bottom: 8px;
+        }
+
+        .email-check-notice p {
+            color: #555;
+            font-size: 0.9em;
+        }
+
+        /* 또는 구분선 */
+        .or-divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+        }
+
+        .or-divider::before,
+        .or-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #ddd;
+        }
+
+        .or-divider span {
+            padding: 0 15px;
+            color: #888;
+            font-size: 0.9em;
+            font-weight: 600;
         }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <h1>🔐 Auth Service API 통합 테스트</h1>
+        <h1>Auth Service API 통합 테스트</h1>
 
         <div class="info-box">
-            <h3>📌 사용 방법</h3>
+            <h3>사용 방법</h3>
             <p>
-                1. <strong>일반 로그인:</strong> 회원가입 -> 이메일 인증 -> 로그인<br>
-                2. <strong>소셜 로그인:</strong> 구글/네이버 로그인 버튼 클릭 -> 새 창에서 로그인 -> <strong>결과 JSON 복사</strong> -> '소셜 결과 파싱'에
-                붙여넣기<br>
-                3. 로그인이 완료되면 토큰이 자동으로 저장되어 '보호된 라우트' 테스트가 가능합니다.
+                <strong>1. 일반 로그인:</strong> 회원가입 -> 이메일 인증 (외국인) -> 로그인<br>
+                <strong>2. 소셜 로그인:</strong> 구글/네이버/카카오 버튼 클릭 -> 새 창에서 로그인 -> 결과 JSON 복사 -> '소셜 결과 파싱'에 붙여넣기<br>
+                <strong>3. 계정 연동:</strong> 기존 이메일 계정이 있는 경우 -> 이메일 인증 또는 비밀번호 확인 후 소셜 계정 연동
             </p>
         </div>
 
         <div class="grid">
             <div class="card">
-                <h2>🏥 Health Check</h2>
+                <h2>Health Check</h2>
                 <button onclick="healthCheck()">서버 상태 확인</button>
             </div>
 
             <div class="card" id="registerCard">
-                <h2>📝 회원가입</h2>
+                <h2>회원가입</h2>
 
                 <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTab('korean', this)">🇰🇷 한국인 (간편)</button>
-                    <button class="tab-btn" onclick="switchTab('foreigner', this)">🌎 Foreigner</button>
+                    <button class="tab-btn active" onclick="switchTab('korean', this)">한국인 (간편)</button>
+                    <button class="tab-btn" onclick="switchTab('foreigner', this)">Foreigner</button>
                 </div>
 
                 <div id="tab-korean" class="tab-content active">
                     <div class="hint-text">
-                        📢 휴대전화 번호는 본인 인증용으로만 사용되며, <strong>로그인은 이메일로 진행됩니다.</strong>
+                        휴대전화 번호는 본인 인증용으로만 사용되며, <strong>로그인은 이메일로 진행됩니다.</strong>
                     </div>
 
                     <div class="form-group">
@@ -434,7 +717,7 @@
 
                 <div id="tab-foreigner" class="tab-content">
                     <div class="hint-text">
-                        📧 You must verify your email address to log in.
+                        You must verify your email address to log in.
                     </div>
                     <div class="form-group">
                         <label>Email (Login ID)</label>
@@ -449,7 +732,7 @@
             </div>
 
             <div class="card">
-                <h2>🔑 일반 로그인</h2>
+                <h2>일반 로그인</h2>
                 <div class="form-group">
                     <label>이메일</label>
                     <input type="email" id="loginEmail" placeholder="test@example.com">
@@ -465,7 +748,7 @@
             </div>
 
             <div class="card">
-                <h2>🔵 Google 소셜 로그인</h2>
+                <h2>Google 소셜 로그인</h2>
                 <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
                     버튼을 누르면 구글 로그인 페이지가 <strong>새 창</strong>으로 열립니다.
                 </p>
@@ -475,7 +758,7 @@
 
                 <div class="divider"></div>
 
-                <h3>📋 소셜 결과 파싱</h3>
+                <h3 style="font-size: 1em; margin-bottom: 10px; color: #555;">소셜 결과 파싱</h3>
                 <p style="font-size: 0.8em; color: #888; margin-bottom: 10px;">
                     새 창에 뜬 JSON 전체를 복사해서 아래에 붙여넣으세요.
                 </p>
@@ -487,7 +770,7 @@
             </div>
 
             <div class="card">
-                <h2>🟢 Naver 소셜 로그인</h2>
+                <h2>Naver 소셜 로그인</h2>
                 <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
                     버튼을 누르면 네이버 로그인 페이지가 <strong>새 창</strong>으로 열립니다.
                 </p>
@@ -503,7 +786,7 @@
             </div>
 
             <div class="card">
-                <h2>🟡 Kakao 소셜 로그인</h2>
+                <h2>Kakao 소셜 로그인</h2>
                 <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
                     버튼을 누르면 카카오 로그인 페이지가 <strong>새 창</strong>으로 열립니다.
                 </p>
@@ -519,7 +802,7 @@
             </div>
 
             <div class="card">
-                <h2>🔒 보호된 라우트</h2>
+                <h2>보호된 라우트</h2>
                 <div class="form-group">
                     <label>Access Token (자동 입력됨)</label>
                     <textarea id="protectedToken" placeholder="로그인하면 자동으로 채워집니다"></textarea>
@@ -528,7 +811,7 @@
             </div>
 
             <div class="card">
-                <h2>✉️ 이메일 인증</h2>
+                <h2>이메일 인증</h2>
                 <div class="form-group">
                     <label>인증 토큰 (DB/메일 확인)</label>
                     <input type="text" id="verifyToken" placeholder="uuid-token-here">
@@ -539,12 +822,12 @@
             </div>
 
             <div class="card">
-                <h2>🔄 토큰 관리</h2>
+                <h2>토큰 관리</h2>
                 <div class="form-group">
                     <label>Refresh Token</label>
                     <textarea id="refreshTokenInput" placeholder="로그인하면 자동으로 채워집니다"></textarea>
                 </div>
-                <div style="display: flex; gap: 10px;">
+                <div class="btn-group">
                     <button onclick="refreshToken()">갱신</button>
                     <button class="btn-secondary" onclick="logout()">로그아웃</button>
                 </div>
@@ -552,66 +835,177 @@
         </div>
 
         <div class="token-display" id="tokenDisplay" style="display: none;">
-            <h3>💾 현재 활성화된 세션</h3>
+            <h3>현재 활성화된 세션</h3>
             <p><strong>Access Token:</strong> <span id="savedAccessToken"></span></p>
             <p><strong>Refresh Token:</strong> <span id="savedRefreshToken"></span></p>
         </div>
 
         <div class="response">
-            <h2>📤 응답 결과</h2>
+            <h2>응답 결과</h2>
             <div id="responseArea">여기에 API 응답 결과가 표시됩니다...</div>
         </div>
     </div>
 
+    <!-- 에러 모달 -->
     <div id="errorModal" class="modal">
         <div class="modal-content">
-            <span class="close-btn" onclick="closeModal()">&times;</span>
-            <div class="modal-header">⚠️ 오류 발생</div>
+            <span class="close-btn" onclick="closeModal('errorModal')">&times;</span>
+            <div class="modal-header error">오류 발생</div>
             <div class="modal-body" id="modalMessage">
                 알 수 없는 오류가 발생했습니다.
             </div>
-            <button class="modal-confirm-btn" onclick="closeModal()">확인</button>
+            <button class="modal-confirm-btn error" onclick="closeModal('errorModal')">확인</button>
         </div>
     </div>
+
+    <!-- 계정 연동 확인 모달 (NEW) -->
+    <div id="linkModal" class="modal link-modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('linkModal')">&times;</span>
+            <div class="modal-header warning">기존 계정이 발견되었습니다</div>
+
+            <div class="account-info-card">
+                <h4>계정 정보</h4>
+                <div class="info-row">
+                    <span class="info-label">이메일</span>
+                    <span class="info-value" id="linkModalEmail">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">연동할 소셜</span>
+                    <span class="info-value" id="linkModalProvider">-</span>
+                </div>
+            </div>
+
+            <p style="color: #555; margin-bottom: 15px;">
+                이 이메일로 가입된 계정이 이미 존재합니다.<br>
+                <strong>소셜 계정을 기존 계정에 연동하시겠습니까?</strong>
+            </p>
+
+            <!-- 이메일 인증 안내 (이메일이 발송된 경우) -->
+            <div class="email-check-notice" id="emailSentNotice" style="display: none;">
+                <div class="icon">📧</div>
+                <h4>인증 이메일이 발송되었습니다!</h4>
+                <p><strong id="emailSentTo">-</strong> 으로 인증 링크를 보내드렸습니다.<br>
+                이메일을 확인하고 링크를 클릭하면 자동으로 연동됩니다.</p>
+            </div>
+
+            <!-- 비밀번호 인증 옵션 (비밀번호가 있는 경우) -->
+            <div id="passwordOption" style="display: none;">
+                <div class="or-divider">
+                    <span>또는</span>
+                </div>
+
+                <div class="verification-option" onclick="togglePasswordInput()">
+                    <h4><span class="icon">🔑</span> 비밀번호로 바로 인증하기</h4>
+                    <p>기존 계정의 비밀번호를 입력하면 즉시 연동됩니다.</p>
+                </div>
+
+                <div class="password-input-area" id="passwordInputArea">
+                    <div class="form-group">
+                        <label>기존 계정 비밀번호</label>
+                        <input type="password" id="linkPassword" placeholder="기존 계정의 비밀번호를 입력하세요">
+                    </div>
+                    <button class="btn-warning" onclick="confirmSocialLinkByPassword()">비밀번호로 연동하기</button>
+                </div>
+            </div>
+
+            <input type="hidden" id="linkToken" value="">
+
+            <div class="btn-group" style="margin-top: 20px;">
+                <button class="btn-secondary" onclick="closeModal('linkModal')">나중에 하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 성공 모달 -->
+    <div id="successModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('successModal')">&times;</span>
+            <div class="modal-header info">연동 완료!</div>
+            <div class="modal-body" id="successMessage">
+                소셜 계정이 성공적으로 연동되었습니다.
+            </div>
+            <button class="modal-confirm-btn" onclick="closeModal('successModal')">확인</button>
+        </div>
+    </div>
+
+    <!-- 토스트 알림 -->
+    <div id="toast" class="toast"></div>
 
     <script>
         const API_BASE_URL = 'http://localhost:8080';
         let accessToken = '';
         let refreshTokenValue = '';
+        let pendingLinkData = null;
 
-        // [추가] 모달 제어 함수
+        // 모달 제어 함수
         function showErrorModal(status, errorMessage) {
             const modal = document.getElementById('errorModal');
             const messageEl = document.getElementById('modalMessage');
 
-            // 상태 코드가 있으면 함께 표시
             const displayMsg = status ? `[Status: ${status}]<br>${errorMessage}` : errorMessage;
             messageEl.innerHTML = displayMsg;
 
             modal.style.display = 'block';
         }
 
-        function closeModal() {
-            document.getElementById('errorModal').style.display = 'none';
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            // 비밀번호 입력창 초기화
+            if (modalId === 'linkModal') {
+                document.getElementById('passwordInputArea').classList.remove('active');
+                document.getElementById('linkPassword').value = '';
+            }
         }
 
         // 모달 바깥 영역 클릭 시 닫기
         window.onclick = function (event) {
-            const modal = document.getElementById('errorModal');
-            if (event.target == modal) {
-                modal.style.display = "none";
-            }
+            const modals = ['errorModal', 'linkModal', 'successModal'];
+            modals.forEach(modalId => {
+                const modal = document.getElementById(modalId);
+                if (event.target == modal) {
+                    closeModal(modalId);
+                }
+            });
+        }
+
+        // 토스트 알림
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.style.display = 'block';
+
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
         }
 
         // 응답 표시 및 토큰 자동 저장 함수
         function displayResponse(status, data) {
             const responseArea = document.getElementById('responseArea');
-            const statusClass = status >= 200 && status < 300 ? 'success' : 'error';
+            let statusClass = 'success';
+
+            if (status >= 400) statusClass = 'error';
+            if (status === 409) statusClass = 'warning';
 
             responseArea.innerHTML = `<span class="status ${statusClass}">Status: ${status}</span>\n\n` +
                 JSON.stringify(data, null, 2);
 
-            // [수정] 에러 발생 시 (Status 0 또는 400 이상) 모달 띄우기
+            // 소셜 연동 검증 필요 응답 처리 (409 + SOCIAL_LINK_VERIFICATION_REQUIRED)
+            if (status === 409 && data.code === 'SOCIAL_LINK_VERIFICATION_REQUIRED') {
+                pendingLinkData = {
+                    linkToken: data.link_token,
+                    email: data.email,
+                    provider: data.provider,
+                    emailSent: data.email_sent,
+                    hasPassword: data.has_password
+                };
+                showLinkModal(data);
+                return;
+            }
+
+            // 일반 에러 처리
             if (status === 0 || status >= 400) {
                 let msg = "오류가 발생했습니다.";
                 if (data.error) msg = data.error;
@@ -620,9 +1014,88 @@
                 showErrorModal(status, msg);
             }
 
-            // 로그인 성공 시 (일반 로그인 or 소셜 로그인 파싱) 토큰 저장
+            // 로그인 성공 시 토큰 저장
             if (data.data && data.data.access_token) {
                 saveTokens(data.data.access_token, data.data.refresh_token);
+            }
+        }
+
+        // 계정 연동 모달 표시
+        function showLinkModal(data) {
+            document.getElementById('linkModalEmail').textContent = data.email;
+            document.getElementById('linkModalProvider').textContent = data.provider.toUpperCase();
+            document.getElementById('linkToken').value = data.link_token;
+
+            // 이메일 발송 안내
+            const emailNotice = document.getElementById('emailSentNotice');
+            if (data.email_sent) {
+                document.getElementById('emailSentTo').textContent = data.email;
+                emailNotice.style.display = 'block';
+            } else {
+                emailNotice.style.display = 'none';
+            }
+
+            // 비밀번호 옵션 (비밀번호가 있는 경우에만 표시)
+            const passwordOption = document.getElementById('passwordOption');
+            if (data.has_password) {
+                passwordOption.style.display = 'block';
+            } else {
+                passwordOption.style.display = 'none';
+            }
+
+            document.getElementById('linkModal').style.display = 'block';
+        }
+
+        // 비밀번호 입력창 토글
+        function togglePasswordInput() {
+            const inputArea = document.getElementById('passwordInputArea');
+            inputArea.classList.toggle('active');
+            if (inputArea.classList.contains('active')) {
+                document.getElementById('linkPassword').focus();
+            }
+        }
+
+        // 비밀번호로 소셜 연동 확인 API 호출
+        async function confirmSocialLinkByPassword() {
+            const linkToken = document.getElementById('linkToken').value;
+            const password = document.getElementById('linkPassword').value;
+
+            if (!linkToken || !password) {
+                showErrorModal(0, '비밀번호를 입력해주세요.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/auth/confirm-social-link`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ link_token: linkToken, password: password })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    // 연동 성공
+                    closeModal('linkModal');
+                    pendingLinkData = null;
+
+                    // 토큰 저장
+                    if (data.data && data.data.access_token) {
+                        saveTokens(data.data.access_token, data.data.refresh_token);
+                    }
+
+                    displayResponse(response.status, data);
+
+                    // 성공 모달 표시
+                    document.getElementById('successMessage').innerHTML =
+                        '소셜 계정이 성공적으로 연동되었습니다!<br><br>이제 소셜 로그인으로 바로 로그인할 수 있습니다.';
+                    document.getElementById('successModal').style.display = 'block';
+
+                    showToast('소셜 계정 연동 완료!', 'success');
+                } else {
+                    displayResponse(response.status, data);
+                }
+            } catch (error) {
+                displayResponse(0, { error: error.message });
             }
         }
 
@@ -635,11 +1108,9 @@
             document.getElementById('savedRefreshToken').textContent = refreshTokenValue.substring(0, 50) + '...';
             document.getElementById('tokenDisplay').style.display = 'block';
 
-            // 입력 필드 자동 채우기
             document.getElementById('protectedToken').value = accessToken;
             document.getElementById('refreshTokenInput').value = refreshTokenValue;
 
-            // 스크롤을 토큰 디스플레이 쪽으로 이동
             document.getElementById('tokenDisplay').scrollIntoView({ behavior: 'smooth' });
         }
 
@@ -648,9 +1119,24 @@
             const jsonInput = document.getElementById('socialJsonInput').value;
             try {
                 const data = JSON.parse(jsonInput);
+
+                // 소셜 연동 검증 필요 응답인 경우
+                if (data.code === 'SOCIAL_LINK_VERIFICATION_REQUIRED') {
+                    pendingLinkData = {
+                        linkToken: data.link_token,
+                        email: data.email,
+                        provider: data.provider,
+                        emailSent: data.email_sent,
+                        hasPassword: data.has_password
+                    };
+                    showLinkModal(data);
+                    return;
+                }
+
+                // 정상 로그인 응답
                 if (data.data && data.data.access_token) {
-                    displayResponse(200, data); // displayResponse가 saveTokens를 호출함
-                    alert("소셜 로그인 토큰이 적용되었습니다!");
+                    displayResponse(200, data);
+                    showToast('소셜 로그인 토큰이 적용되었습니다!', 'success');
                 } else {
                     showErrorModal(0, "유효한 토큰 데이터가 없습니다. JSON을 확인해주세요.");
                 }
@@ -660,18 +1146,12 @@
         }
 
         function switchTab(type, btnElement) {
-            // 1. 모든 탭 버튼에서 active 클래스 제거
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-
-            // 2. 현재 클릭된 버튼에 active 클래스 추가
             if (btnElement) {
                 btnElement.classList.add('active');
             }
-
-            // 3. 모든 탭 내용 숨기기
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
-            // 4. 선택된 탭 내용만 보이기
             if (type === 'korean') {
                 document.getElementById('tab-korean').classList.add('active');
             } else {
@@ -679,7 +1159,6 @@
             }
         }
 
-        // 하이픈 자동 입력 (간단 버전)
         function autoHyphen(target) {
             target.value = target.value
                 .replace(/[^0-9]/g, '')
@@ -735,6 +1214,10 @@
                 });
                 const data = await response.json();
                 displayResponse(response.status, data);
+
+                if (response.ok) {
+                    showToast('회원가입이 완료되었습니다!', 'success');
+                }
             } catch (error) {
                 displayResponse(0, { error: error.message });
             }
@@ -757,6 +1240,10 @@
                 });
                 const data = await response.json();
                 displayResponse(response.status, data);
+
+                if (response.ok) {
+                    showToast('로그인 성공!', 'success');
+                }
             } catch (error) {
                 displayResponse(0, { error: error.message });
             }
@@ -770,6 +1257,10 @@
                 const response = await fetch(`${API_BASE_URL}/api/v1/auth/verify/${token}`);
                 const data = await response.json();
                 displayResponse(response.status, data);
+
+                if (response.ok) {
+                    showToast('이메일 인증이 완료되었습니다!', 'success');
+                }
             } catch (error) {
                 displayResponse(0, { error: error.message });
             }
@@ -786,6 +1277,10 @@
                     });
                     const data = await response.json();
                     displayResponse(response.status, data);
+
+                    if (response.ok) {
+                        showToast('인증 메일이 재발송되었습니다!', 'success');
+                    }
                 } catch (error) {
                     displayResponse(0, { error: error.message });
                 }
@@ -820,6 +1315,10 @@
                 });
                 const data = await response.json();
                 displayResponse(response.status, data);
+
+                if (response.ok) {
+                    showToast('토큰이 갱신되었습니다!', 'success');
+                }
             } catch (error) {
                 displayResponse(0, { error: error.message });
             }
@@ -846,7 +1345,7 @@
                     document.getElementById('refreshTokenInput').value = '';
                     document.getElementById('savedAccessToken').textContent = '';
                     document.getElementById('savedRefreshToken').textContent = '';
-                    alert("로그아웃 되었습니다.");
+                    showToast('로그아웃 되었습니다.', 'success');
                 }
             } catch (error) {
                 displayResponse(0, { error: error.message });
