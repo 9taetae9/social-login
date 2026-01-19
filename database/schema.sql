@@ -82,3 +82,19 @@ ALTER TABLE users MODIFY COLUMN country_code VARCHAR(10) NULL;
 
 ALTER TABLE users
 MODIFY COLUMN user_type ENUM('KOREAN', 'FOREIGNER') NULL;
+
+-- pending_social_links 테이블 (소셜 연동 대기 검증용)
+CREATE TABLE pending_social_links (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    provider VARCHAR(20) NOT NULL,
+    social_id VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    link_token VARCHAR(255) NOT NULL UNIQUE,
+    email_token VARCHAR(255) UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_pending_link_token (link_token),
+    INDEX idx_pending_email_token (email_token)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
