@@ -65,6 +65,12 @@ type ResendVerificationRequest struct {
 	Email string `json:"email" validate:"required,email"`
 }
 
+// 소셜 연동 확인 요청 구조체
+type ConfirmSocialLinkRequest struct {
+	LinkToken string `json:"link_token" validate:"required"`
+	Password  string `json:"password" validate:"required"`
+}
+
 // ErrorResponse 에러 응답 구조체
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -618,6 +624,54 @@ func (h *AuthHandler) ResendVerificationEmail(c *gin.Context) {
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Message: "Verification email sent successfully",
+	})
+}
+
+// ConfirmSocialLinkByPassword 비밀번호로 소셜 연동 확인 핸들러
+func (h *AuthHandler) ConfirmSocialLinkByPassword(c *gin.Context) {
+	var req ConfirmSocialLinkRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errors.HandleError(c, errors.NewValidationError("Invalid request body"))
+		return
+	}
+
+	// 유효성 검증
+	if err := h.validate.Struct(req); err != nil {
+		errors.HandleError(c, errors.NewValidationError(err.Error()))
+		return
+	}
+
+	// 소셜 연동 확인 처리
+	response, err := h.authService.ConfirmSocialLinkByPassword(req.LinkToken, req.Password)
+	if err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Social account linked successfully",
+		Data:    response,
+	})
+}
+
+// ConfirmSocialLinkByEmailToken 이메일 토큰으로 소셜 연동 확인 핸들러
+func (h *AuthHandler) ConfirmSocialLinkByEmailToken(c *gin.Context) {
+	token := c.Param("token")
+	if token == "" {
+		errors.HandleError(c, errors.NewValidationError("Email token is required"))
+		return
+	}
+
+	// 소셜 연동 확인 처리
+	response, err := h.authService.ConfirmSocialLinkByEmailToken(token)
+	if err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Social account linked successfully",
+		Data:    response,
 	})
 }
 
