@@ -68,3 +68,20 @@ type RefreshToken struct {
 func (RefreshToken) TableName() string {
 	return "refresh_tokens"
 }
+
+type PendingSocialLink struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	UserID     uint      `gorm:"not null;index" json:"user_id"`
+	Provider   string    `gorm:"not null;size:20" json:"provider"`
+	SocialID   string    `gorm:"not null;size:255" json:"social_id"`
+	Email      string    `gorm:"not null;size:255" json:"email"`
+	LinkToken  string    `gorm:"uniqueIndex;not null;size:255" json:"link_token"`
+	EmailToken *string   `gorm:"uniqueIndex;size:255" json:"email_token"`
+	ExpiresAt  time.Time `gorm:"not null" json:"expires_at"`
+	CreatedAt  time.Time `json:"created_at"`
+	User       User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+}
+
+func (PendingSocialLink) TableName() string {
+	return "pending_social_links"
+}
