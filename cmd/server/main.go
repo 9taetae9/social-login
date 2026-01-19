@@ -68,6 +68,8 @@ func main() {
 			auth.POST("/refresh", authHandler.RefreshToken)
 			auth.GET("/verify/:token", authHandler.VerifyEmail)
 			auth.POST("/resend-verify", authHandler.ResendVerificationEmail)
+			auth.POST("/confirm-social-link", authHandler.ConfirmSocialLinkByPassword)
+			auth.GET("/confirm-social-link/:token", authHandler.ConfirmSocialLinkByEmailToken)
 
 			// 인증 필요 엔드포인트
 			auth.POST("/logout", authHandler.Logout)
