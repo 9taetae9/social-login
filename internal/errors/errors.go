@@ -6,10 +6,11 @@ import (
 
 // AppError 애플리케이션 에러의 기본 구조
 type AppError struct {
-	Code       string // 에러 코드 (AUTH_EMAIL_EXISTS 등)
-	Message    string // 사용자에게 보여줄 메시지
-	Err        error  // 원본 에러 (wrapping)
-	StatusCode int    // HTTP 상태 코드
+	Code       string                 // 에러 코드 (AUTH_EMAIL_EXISTS 등)
+	Message    string                 // 사용자에게 보여줄 메시지
+	Err        error                  // 원본 에러 (wrapping)
+	StatusCode int                    // HTTP 상태 코드
+	Data       map[string]interface{} // 추가 데이터 (소셜 연동 검증 등)
 }
 
 func (e *AppError) Error() string {
@@ -85,5 +86,15 @@ func NewInternalError(code, message string, err error) *AppError {
 		Message:    message,
 		Err:        err,
 		StatusCode: 500,
+	}
+}
+
+// NewConflictErrorWithData 추가 데이터가 포함된 충돌 에러
+func NewConflictErrorWithData(code, message string, data map[string]interface{}) *AppError {
+	return &AppError{
+		Code:       code,
+		Message:    message,
+		StatusCode: 409,
+		Data:       data,
 	}
 }
