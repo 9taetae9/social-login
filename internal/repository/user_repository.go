@@ -20,6 +20,7 @@ type UserRepository interface {
 	// 소셜 로그인 관련
 	// 제공자와 식별자로 유저 조회
 	FindSocialAccount(provider, socialID string) (*models.SocialAccount, error)
+	FindSocialAccountsByUserID(userID uint) ([]models.SocialAccount, error)
 	CreateSocialAccount(socialAccount *models.SocialAccount) error
 
 	// 기존 계정에 소셜 정보 연동 (계정 통합)
@@ -129,6 +130,18 @@ func (r *userRepository) CreateSocialAccount(socialAccount *models.SocialAccount
 	}
 	slog.Debug("Social account created successfully", "social_account_id", socialAccount.ID, "provider", socialAccount.Provider)
 	return nil
+}
+
+// 유저의 연동된 소셜 계정 목록 조회
+func (r *userRepository) FindSocialAccountsByUserID(userID uint) ([]models.SocialAccount, error) {
+	var socialAccounts []models.SocialAccount
+	err := r.db.Where("user_id = ?", userID).Find(&socialAccounts).Error
+	if err != nil {
+		slog.Error("Failed to find social accounts by user ID", "error", err, "user_id", userID)
+		return nil, errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to find social accounts", 500)
+	}
+	slog.Debug("Social accounts found", "user_id", userID, "count", len(socialAccounts))
+	return socialAccounts, nil
 }
 
 // 기존 유저에게 소셜 정보 업데이트(계정 통합용)
