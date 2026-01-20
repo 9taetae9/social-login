@@ -286,14 +286,11 @@ func (h *AuthHandler) GoogleCallback(c *gin.Context) {
 	// Service 계층의 SocialLogin 호출
 	authResponse, err := h.authService.SocialLogin(googleUser.Email, "google", googleUser.ID)
 	if err != nil {
-		errors.HandleError(c, err)
+		h.sendSocialCallbackResponse(c, "google", nil, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, SuccessResponse{
-		Message: "Google login successful",
-		Data:    authResponse,
-	})
+	h.sendSocialCallbackResponse(c, "google", authResponse, nil)
 }
 
 // Naver 로그인 페이지로 리다이렉트
@@ -406,14 +403,11 @@ func (h *AuthHandler) NaverCallback(c *gin.Context) {
 	// Service 계층의 SocialLogin 호출
 	authResponse, err := h.authService.SocialLogin(naverUser.Response.Email, "naver", naverUser.Response.ID)
 	if err != nil {
-		errors.HandleError(c, err)
+		h.sendSocialCallbackResponse(c, "naver", nil, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, SuccessResponse{
-		Message: "Naver login successful",
-		Data:    authResponse,
-	})
+	h.sendSocialCallbackResponse(c, "naver", authResponse, nil)
 }
 
 // Kakao 로그인 페이지로 리다이렉트
@@ -523,14 +517,250 @@ func (h *AuthHandler) KakaoCallback(c *gin.Context) {
 	// Service 계층의 SocialLogin 호출
 	authResponse, err := h.authService.SocialLogin(kakaoUser.KakaoAccount.Email, "kakao", kakaoID)
 	if err != nil {
-		errors.HandleError(c, err)
+		h.sendSocialCallbackResponse(c, "kakao", nil, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, SuccessResponse{
-		Message: "Kakao login successful",
-		Data:    authResponse,
-	})
+	h.sendSocialCallbackResponse(c, "kakao", authResponse, nil)
+}
+
+// sendSocialCallbackResponse 소셜 로그인 콜백 응답을 HTML로 반환 (postMessage 사용)
+func (h *AuthHandler) sendSocialCallbackResponse(c *gin.Context, provider string, authResponse interface{}, err error) {
+	var jsonData string
+	var statusCode int
+
+	if err != nil {
+		// 에러 응답 생성
+		statusCode = http.StatusOK // HTML 페이지는 항상 200으로 반환
+
+		// AppError인 경우 상세 데이터 포함
+		if appErr, ok := err.(*errors.AppError); ok {
+			if appErr.Data != nil {
+				// 소셜 연동 필요 응답 (409) - code 필드 포함
+				responseData := make(map[string]interface{})
+				for k, v := range appErr.Data {
+					responseData[k] = v
+				}
+				responseData["code"] = appErr.Code
+				responseData["message"] = appErr.Message
+				dataBytes, _ := json.Marshal(responseData)
+				jsonData = string(dataBytes)
+			} else {
+				errResp := map[string]interface{}{
+					"error":  appErr.Message,
+					"code":   appErr.Code,
+					"status": appErr.StatusCode,
+				}
+				dataBytes, _ := json.Marshal(errResp)
+				jsonData = string(dataBytes)
+			}
+		} else {
+			errResp := map[string]interface{}{
+				"error": err.Error(),
+			}
+			dataBytes, _ := json.Marshal(errResp)
+			jsonData = string(dataBytes)
+		}
+	} else {
+		// 성공 응답 생성
+		statusCode = http.StatusOK
+		successResp := SuccessResponse{
+			Message: fmt.Sprintf("%s login successful", provider),
+			Data:    authResponse,
+		}
+		dataBytes, _ := json.Marshal(successResp)
+		jsonData = string(dataBytes)
+	}
+
+	var html string
+
+	if err != nil {
+		// 에러/연동 필요 응답용 HTML
+		html = fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>계정 연동 필요</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 420px;
+        }
+        .warning-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #f57c00 0%%, #ff9800 100%%);
+            border-radius: 50%%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            color: white;
+            font-size: 30px;
+        }
+        h2 { color: #f57c00; margin-bottom: 10px; }
+        p { color: #666; margin-bottom: 15px; line-height: 1.6; }
+        .info-box {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            text-align: left;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .info-box p { margin: 5px 0; font-size: 0.9em; }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .btn:hover { opacity: 0.9; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="warning-icon">!</div>
+        <h2>계정 연동이 필요합니다</h2>
+        <p>이 이메일로 가입된 계정이 이미 존재합니다.</p>
+        <div class="info-box">
+            <p><strong>이메일 인증</strong> 또는 <strong>비밀번호 확인</strong>으로<br>기존 계정과 연동할 수 있습니다.</p>
+        </div>
+        <p>원래 페이지로 돌아가서 연동을 진행해주세요.</p>
+        <button class="btn" onclick="window.close()">이 창 닫기</button>
+    </div>
+    <script>
+        (function() {
+            var data = %s;
+            var provider = '%s';
+
+            console.log('Social login response (link required):', data);
+
+            // localStorage에 결과 저장 (부모 창에서 storage 이벤트로 감지)
+            var result = {
+                type: 'SOCIAL_LOGIN_CALLBACK',
+                provider: provider,
+                data: data,
+                timestamp: Date.now()
+            };
+
+            localStorage.setItem('socialLoginResult', JSON.stringify(result));
+            // 연동 필요 케이스는 자동으로 창을 닫지 않음
+        })();
+    </script>
+</body>
+</html>`, jsonData, provider)
+	} else {
+		// 성공 응답용 HTML
+		html = fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>로그인 완료</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 400px;
+        }
+        .success-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #43a047 0%%, #66bb6a 100%%);
+            border-radius: 50%%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            color: white;
+            font-size: 30px;
+        }
+        h2 { color: #333; margin-bottom: 10px; }
+        p { color: #666; margin-bottom: 20px; }
+        .close-hint {
+            font-size: 0.9em;
+            color: #999;
+            margin-top: 15px;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .btn:hover { opacity: 0.9; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">✓</div>
+        <h2>로그인 완료!</h2>
+        <p>원래 페이지로 돌아가면 자동으로 로그인됩니다.</p>
+        <button class="btn" onclick="window.close()">이 창 닫기</button>
+        <p class="close-hint">창이 닫히지 않으면 수동으로 닫아주세요.</p>
+    </div>
+    <script>
+        (function() {
+            var data = %s;
+            var provider = '%s';
+
+            console.log('Social login response:', data);
+
+            // localStorage에 결과 저장 (부모 창에서 storage 이벤트로 감지)
+            var result = {
+                type: 'SOCIAL_LOGIN_CALLBACK',
+                provider: provider,
+                data: data,
+                timestamp: Date.now()
+            };
+
+            localStorage.setItem('socialLoginResult', JSON.stringify(result));
+
+            // 창 닫기 시도
+            setTimeout(function() {
+                window.close();
+            }, 1000);
+        })();
+    </script>
+</body>
+</html>`, jsonData, provider)
+	}
+
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(statusCode, html)
 }
 
 // 토큰 갱신 핸들러
