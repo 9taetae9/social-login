@@ -28,6 +28,7 @@ type AuthService interface {
 	ResendVerificationEmail(email string) error
 	ConfirmSocialLinkByPassword(linkToken, password string) (*AuthResponse, error)
 	ConfirmSocialLinkByEmailToken(emailToken string) (*AuthResponse, error)
+	GetLinkedSocialAccounts(userID uint) (*LinkedAccountsResponse, error)
 }
 
 type authService struct {
@@ -39,6 +40,17 @@ type AuthResponse struct {
 	AccessToken  string       `json:"access_token"`
 	RefreshToken string       `json:"refresh_token"`
 	User         *models.User `json:"user"`
+}
+
+type SocialAccountInfo struct {
+	Provider  string `json:"provider"`
+	Email     string `json:"email"`
+	CreatedAt string `json:"created_at"`
+}
+
+type LinkedAccountsResponse struct {
+	User           *models.User        `json:"user"`
+	SocialAccounts []SocialAccountInfo `json:"social_accounts"`
 }
 
 func NewAuthService(userRepo repository.UserRepository, cfg *config.Config) AuthService {
@@ -313,10 +325,10 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 			errors.ErrCodeSocialLinkVerificationRequired,
 			"Account verification required to link social account",
 			map[string]interface{}{
-				"link_token":  linkToken,
-				"email":       email,
-				"provider":    provider,
-				"email_sent":  emailSent,
+				"link_token":   linkToken,
+				"email":        email,
+				"provider":     provider,
+				"email_sent":   emailSent,
 				"has_password": user.PasswordHash != nil,
 			},
 		)
@@ -716,4 +728,38 @@ func (s *authService) ResendVerificationEmail(email string) error {
 
 	slog.Info("Verification email resent successfully", "email", logger.SanitizeEmail(email))
 	return nil
+}
+
+// 연동된 소셜 계정 목록 조회
+func (s *authService) GetLinkedSocialAccounts(userID uint) (*LinkedAccountsResponse, error) {
+	slog.Info("Get linked social accounts", "user_id", userID)
+
+	// 사용자 조회
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 연동된 소셜 계정 조회
+	socialAccounts, err := s.userRepo.FindSocialAccountsByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 응답 변환
+	accountInfos := make([]SocialAccountInfo, len(socialAccounts))
+	for i, account := range socialAccounts {
+		accountInfos[i] = SocialAccountInfo{
+			Provider:  account.Provider,
+			Email:     account.Email,
+			CreatedAt: account.CreatedAt.Format("2006-01-02 15:04:05"),
+		}
+	}
+
+	slog.Info("Linked social accounts retrieved", "user_id", userID, "count", len(accountInfos))
+
+	return &LinkedAccountsResponse{
+		User:           user,
+		SocialAccounts: accountInfos,
+	}, nil
 }
