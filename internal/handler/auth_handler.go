@@ -326,7 +326,7 @@ func (h *AuthHandler) NaverLogin(c *gin.Context) {
 		ClientID:     h.cfg.Oauth.NaverClientID,
 		ClientSecret: h.cfg.Oauth.NaverClientSecret,
 		RedirectURL:  h.cfg.Oauth.NaverRedirectURL,
-		Scopes:       []string{"openid"},
+		Scopes:       []string{"openid", "email"},
 		Endpoint:     naverEndpoint,
 	}
 
@@ -385,7 +385,7 @@ func (h *AuthHandler) NaverCallback(c *gin.Context) {
 		ClientID:     h.cfg.Oauth.NaverClientID,
 		ClientSecret: h.cfg.Oauth.NaverClientSecret,
 		RedirectURL:  h.cfg.Oauth.NaverRedirectURL,
-		Scopes:       []string{"openid"},
+		Scopes:       []string{"openid", "email"},
 		Endpoint:     naverEndpoint,
 	}
 
