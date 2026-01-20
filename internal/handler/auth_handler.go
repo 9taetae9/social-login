@@ -316,17 +316,16 @@ func (h *AuthHandler) GoogleCallback(c *gin.Context) {
 
 // Naver 로그인 페이지로 리다이렉트
 func (h *AuthHandler) NaverLogin(c *gin.Context) {
-	// 네이버 OIDC Endpoint 정의 (OAuth2.0과 다른 path 사용)
+	// 네이버 OAuth2 Endpoint 정의
 	naverEndpoint := oauth2.Endpoint{
-		AuthURL:  "https://nid.naver.com/oauth2/authorize",
-		TokenURL: "https://nid.naver.com/oauth2/token",
+		AuthURL:  "https://nid.naver.com/oauth2.0/authorize",
+		TokenURL: "https://nid.naver.com/oauth2.0/token",
 	}
 
 	naverOauthConfig := &oauth2.Config{
 		ClientID:     h.cfg.Oauth.NaverClientID,
 		ClientSecret: h.cfg.Oauth.NaverClientSecret,
 		RedirectURL:  h.cfg.Oauth.NaverRedirectURL,
-		Scopes:       []string{"openid", "email"},
 		Endpoint:     naverEndpoint,
 	}
 
@@ -375,45 +374,49 @@ func (h *AuthHandler) NaverCallback(c *gin.Context) {
 		return
 	}
 
-	// 네이버 OIDC Endpoint 정의 (OAuth2.0과 다른 path 사용)
+	// 네이버 OAuth2 Endpoint 정의
 	naverEndpoint := oauth2.Endpoint{
-		AuthURL:  "https://nid.naver.com/oauth2/authorize",
-		TokenURL: "https://nid.naver.com/oauth2/token",
+		AuthURL:  "https://nid.naver.com/oauth2.0/authorize",
+		TokenURL: "https://nid.naver.com/oauth2.0/token",
 	}
 
 	naverOauthConfig := &oauth2.Config{
 		ClientID:     h.cfg.Oauth.NaverClientID,
 		ClientSecret: h.cfg.Oauth.NaverClientSecret,
 		RedirectURL:  h.cfg.Oauth.NaverRedirectURL,
-		Scopes:       []string{"openid", "email"},
 		Endpoint:     naverEndpoint,
 	}
 
-	// Code -> Naver Token 교환 (id_token 포함)
+	// Code -> Naver Token 교환
 	token, err := naverOauthConfig.Exchange(context.Background(), code)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to exchange code for token"})
 		return
 	}
 
-	// id_token에서 유저 정보 추출 (추가 API 호출 불필요)
-	idTokenRaw, ok := token.Extra("id_token").(string)
-	if !ok || idTokenRaw == "" {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "id_token not found in response"})
-		return
-	}
-
-	claims, err := parseIDToken(idTokenRaw)
+	// Naver Token으로 유저 정보 조회
+	client := naverOauthConfig.Client(context.Background(), token)
+	resp, err := client.Get("https://openapi.naver.com/v1/nid/me")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse id_token"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get user info from Naver"})
+		return
+	}
+	defer resp.Body.Close()
+
+	var naverUser NaverUserInfo
+	if err := json.NewDecoder(resp.Body).Decode(&naverUser); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse user info"})
 		return
 	}
 
-	// sub (subject)가 Naver 유저 고유 ID
-	naverID := claims.Subject
+	// 네이버 API 응답 성공 여부 확인
+	if naverUser.ResultCode != "00" {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get user info from Naver"})
+		return
+	}
 
 	// Service 계층의 SocialLogin 호출
-	authResponse, err := h.authService.SocialLogin(claims.Email, "naver", naverID)
+	authResponse, err := h.authService.SocialLogin(naverUser.Response.Email, "naver", naverUser.Response.ID)
 	if err != nil {
 		h.sendSocialCallbackResponse(c, "naver", nil, err)
 		return

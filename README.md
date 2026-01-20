@@ -45,9 +45,9 @@ Go 언어 기반의 이메일 및 소셜 로그인(Google, Naver, Kakao) 인증 
 
 ### 3. 소셜 로그인
 - **Google**: OpenID Connect (id_token 활용)
-- **Naver**: OpenID Connect (id_token 활용)
+- **Naver**: OAuth2 + Profile API (OIDC id_token에 email 미포함)
 - **Kakao**: OpenID Connect (id_token 활용)
-- **성능 최적화**: id_token JWT 파싱으로 추가 API 호출 제거 (네트워크 요청 50% 감소)
+- **성능 최적화**: Google/Kakao는 id_token JWT 파싱으로 추가 API 호출 제거
 - 3가지 시나리오 자동 처리:
   1. 기존 소셜 계정 로그인
   2. 기존 이메일 계정에 소셜 연동 (검증 후 통합)
@@ -446,19 +446,15 @@ SOURCE database/schema.sql;
    - 승인된 리디렉션 URI: `http://localhost:8080/api/v1/auth/google/callback`
 5. 클라이언트 ID와 Secret을 `.env`에 입력
 
-#### Naver Login (OpenID Connect)
+#### Naver Login
 1. [네이버 개발자센터](https://developers.naver.com/apps) 접속
 2. 애플리케이션 등록
    - 애플리케이션 이름: 원하는 이름
-   - 사용 API: 네이버 로그인 (OpenID Connect 지원)
+   - 사용 API: 네이버 로그인
    - 서비스 URL: `http://localhost:8080`
    - Callback URL: `http://localhost:8080/api/v1/auth/naver/callback`
 3. 제공 정보: 이메일, 이름 선택
 4. 클라이언트 ID와 Secret을 `.env`에 입력
-
-> **참고**: 네이버 OIDC는 기존 OAuth2.0과 다른 endpoint를 사용합니다.
-> - OIDC: `https://nid.naver.com/oauth2/authorize`, `https://nid.naver.com/oauth2/token`
-> - OAuth2.0: `https://nid.naver.com/oauth2.0/authorize`, `https://nid.naver.com/oauth2.0/token`
 
 #### Kakao Login
 1. [카카오 개발자센터](https://developers.kakao.com/) 접속
