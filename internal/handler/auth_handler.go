@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/9taetae9/social-login/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -82,7 +82,33 @@ type SuccessResponse struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
-// 구글 유저 정보 파싱용 구조체
+// OpenID Connect ID Token Claims 구조체 (Google/Naver/Kakao 공통)
+type IDTokenClaims struct {
+	jwt.RegisteredClaims
+	Email         string `json:"email"`
+	EmailVerified any    `json:"email_verified"` // bool 또는 string일 수 있음
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
+	Nickname      string `json:"nickname"` // Kakao용
+}
+
+// parseIDToken JWT id_token을 파싱하여 claims 반환 (서명 검증 없이)
+// 참고: HTTPS를 통한 token exchange에서 직접 받은 토큰이므로 서명 검증 생략 가능
+func parseIDToken(idToken string) (*IDTokenClaims, error) {
+	token, _, err := jwt.NewParser().ParseUnverified(idToken, &IDTokenClaims{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse id_token: %w", err)
+	}
+
+	claims, ok := token.Claims.(*IDTokenClaims)
+	if !ok {
+		return nil, fmt.Errorf("invalid id_token claims")
+	}
+
+	return claims, nil
+}
+
+// 구글 유저 정보 파싱용 구조체 (fallback용)
 type GoogleUserInfo struct {
 	ID            string `json:"id"`
 	Email         string `json:"email"`
@@ -197,7 +223,7 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 		ClientID:     h.cfg.Oauth.GoogleClientID,
 		ClientSecret: h.cfg.Oauth.GoogleClientSecret,
 		RedirectURL:  h.cfg.Oauth.GoogleRedirectURL,
-		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
+		Scopes:       []string{"openid", "email", "profile"},
 		Endpoint:     google.Endpoint,
 	}
 
@@ -251,40 +277,35 @@ func (h *AuthHandler) GoogleCallback(c *gin.Context) {
 		ClientID:     h.cfg.Oauth.GoogleClientID,
 		ClientSecret: h.cfg.Oauth.GoogleClientSecret,
 		RedirectURL:  h.cfg.Oauth.GoogleRedirectURL,
-		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
+		Scopes:       []string{"openid", "email", "profile"},
 		Endpoint:     google.Endpoint,
 	}
 
-	// Code -> Google Token 교환
+	// Code -> Google Token 교환 (id_token 포함)
 	token, err := googleOauthConfig.Exchange(context.Background(), code)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to exchange code for token"})
 		return
 	}
 
-	// Google Token으로 유저 정보 조회
-	client := googleOauthConfig.Client(context.Background(), token)
-	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get user info from Google"})
-		return
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to read response body"})
+	// id_token에서 유저 정보 추출 (추가 API 호출 불필요)
+	idTokenRaw, ok := token.Extra("id_token").(string)
+	if !ok || idTokenRaw == "" {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "id_token not found in response"})
 		return
 	}
 
-	var googleUser GoogleUserInfo
-	if err := json.Unmarshal(data, &googleUser); err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse user info"})
+	claims, err := parseIDToken(idTokenRaw)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse id_token"})
 		return
 	}
+
+	// sub (subject)가 Google 유저 고유 ID
+	googleID := claims.Subject
 
 	// Service 계층의 SocialLogin 호출
-	authResponse, err := h.authService.SocialLogin(googleUser.Email, "google", googleUser.ID)
+	authResponse, err := h.authService.SocialLogin(claims.Email, "google", googleID)
 	if err != nil {
 		h.sendSocialCallbackResponse(c, "google", nil, err)
 		return
@@ -295,16 +316,17 @@ func (h *AuthHandler) GoogleCallback(c *gin.Context) {
 
 // Naver 로그인 페이지로 리다이렉트
 func (h *AuthHandler) NaverLogin(c *gin.Context) {
-	// 네이버 OAuth2 Endpoint 정의
+	// 네이버 OIDC Endpoint 정의 (OAuth2.0과 다른 path 사용)
 	naverEndpoint := oauth2.Endpoint{
-		AuthURL:  "https://nid.naver.com/oauth2.0/authorize",
-		TokenURL: "https://nid.naver.com/oauth2.0/token",
+		AuthURL:  "https://nid.naver.com/oauth2/authorize",
+		TokenURL: "https://nid.naver.com/oauth2/token",
 	}
 
 	naverOauthConfig := &oauth2.Config{
 		ClientID:     h.cfg.Oauth.NaverClientID,
 		ClientSecret: h.cfg.Oauth.NaverClientSecret,
 		RedirectURL:  h.cfg.Oauth.NaverRedirectURL,
+		Scopes:       []string{"openid"},
 		Endpoint:     naverEndpoint,
 	}
 
@@ -353,55 +375,45 @@ func (h *AuthHandler) NaverCallback(c *gin.Context) {
 		return
 	}
 
-	// 네이버 OAuth2 Endpoint 정의
+	// 네이버 OIDC Endpoint 정의 (OAuth2.0과 다른 path 사용)
 	naverEndpoint := oauth2.Endpoint{
-		AuthURL:  "https://nid.naver.com/oauth2.0/authorize",
-		TokenURL: "https://nid.naver.com/oauth2.0/token",
+		AuthURL:  "https://nid.naver.com/oauth2/authorize",
+		TokenURL: "https://nid.naver.com/oauth2/token",
 	}
 
 	naverOauthConfig := &oauth2.Config{
 		ClientID:     h.cfg.Oauth.NaverClientID,
 		ClientSecret: h.cfg.Oauth.NaverClientSecret,
 		RedirectURL:  h.cfg.Oauth.NaverRedirectURL,
+		Scopes:       []string{"openid"},
 		Endpoint:     naverEndpoint,
 	}
 
-	// Code -> Naver Token 교환
+	// Code -> Naver Token 교환 (id_token 포함)
 	token, err := naverOauthConfig.Exchange(context.Background(), code)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to exchange code for token"})
 		return
 	}
 
-	// Naver Token으로 유저 정보 조회
-	client := naverOauthConfig.Client(context.Background(), token)
-	resp, err := client.Get("https://openapi.naver.com/v1/nid/me")
+	// id_token에서 유저 정보 추출 (추가 API 호출 불필요)
+	idTokenRaw, ok := token.Extra("id_token").(string)
+	if !ok || idTokenRaw == "" {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "id_token not found in response"})
+		return
+	}
+
+	claims, err := parseIDToken(idTokenRaw)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get user info from Naver"})
-		return
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to read response body"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse id_token"})
 		return
 	}
 
-	var naverUser NaverUserInfo
-	if err := json.Unmarshal(data, &naverUser); err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse user info"})
-		return
-	}
-
-	// 네이버 API 응답 성공 여부 확인
-	if naverUser.ResultCode != "00" {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get user info from Naver"})
-		return
-	}
+	// sub (subject)가 Naver 유저 고유 ID
+	naverID := claims.Subject
 
 	// Service 계층의 SocialLogin 호출
-	authResponse, err := h.authService.SocialLogin(naverUser.Response.Email, "naver", naverUser.Response.ID)
+	authResponse, err := h.authService.SocialLogin(claims.Email, "naver", naverID)
 	if err != nil {
 		h.sendSocialCallbackResponse(c, "naver", nil, err)
 		return
@@ -422,6 +434,7 @@ func (h *AuthHandler) KakaoLogin(c *gin.Context) {
 		ClientID:     h.cfg.Oauth.KakaoClientID,
 		ClientSecret: h.cfg.Oauth.KakaoClientSecret,
 		RedirectURL:  h.cfg.Oauth.KakaoRedirectURL,
+		Scopes:       []string{"openid", "account_email"},
 		Endpoint:     kakaoEndpoint,
 	}
 
@@ -480,42 +493,35 @@ func (h *AuthHandler) KakaoCallback(c *gin.Context) {
 		ClientID:     h.cfg.Oauth.KakaoClientID,
 		ClientSecret: h.cfg.Oauth.KakaoClientSecret,
 		RedirectURL:  h.cfg.Oauth.KakaoRedirectURL,
+		Scopes:       []string{"openid", "account_email"},
 		Endpoint:     kakaoEndpoint,
 	}
 
-	// Code -> Kakao Token 교환
+	// Code -> Kakao Token 교환 (id_token 포함)
 	token, err := kakaoOauthConfig.Exchange(context.Background(), code)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to exchange code for token"})
 		return
 	}
 
-	// Kakao Token으로 유저 정보 조회
-	client := kakaoOauthConfig.Client(context.Background(), token)
-	resp, err := client.Get("https://kapi.kakao.com/v2/user/me")
+	// id_token에서 유저 정보 추출 (추가 API 호출 불필요)
+	idTokenRaw, ok := token.Extra("id_token").(string)
+	if !ok || idTokenRaw == "" {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "id_token not found in response"})
+		return
+	}
+
+	claims, err := parseIDToken(idTokenRaw)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get user info from Kakao"})
-		return
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to read response body"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse id_token"})
 		return
 	}
 
-	var kakaoUser KakaoUserInfo
-	if err := json.Unmarshal(data, &kakaoUser); err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse user info"})
-		return
-	}
-
-	// 카카오 ID를 문자열로 변환
-	kakaoID := fmt.Sprintf("%d", kakaoUser.ID)
+	// sub (subject)가 Kakao 유저 고유 ID
+	kakaoID := claims.Subject
 
 	// Service 계층의 SocialLogin 호출
-	authResponse, err := h.authService.SocialLogin(kakaoUser.KakaoAccount.Email, "kakao", kakaoID)
+	authResponse, err := h.authService.SocialLogin(claims.Email, "kakao", kakaoID)
 	if err != nil {
 		h.sendSocialCallbackResponse(c, "kakao", nil, err)
 		return
