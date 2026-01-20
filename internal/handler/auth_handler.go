@@ -923,3 +923,23 @@ func generateRandomState() (string, error) {
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
 }
+
+// GetLinkedSocialAccounts 연동된 소셜 계정 조회 핸들러
+func (h *AuthHandler) GetLinkedSocialAccounts(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	if userID == 0 {
+		errors.HandleError(c, errors.NewAuthError(errors.ErrCodeInvalidToken, "Invalid user ID"))
+		return
+	}
+
+	response, err := h.authService.GetLinkedSocialAccounts(userID)
+	if err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Linked social accounts retrieved successfully",
+		Data:    response,
+	})
+}
