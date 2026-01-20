@@ -665,6 +665,168 @@
             font-size: 0.9em;
             font-weight: 600;
         }
+
+        /* 마이페이지 계정 관리 스타일 */
+        .account-management {
+            background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+            border: 3px solid #667eea;
+            position: relative;
+        }
+
+        .account-management::before {
+            content: '마이페이지';
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4px 15px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .account-management h2 {
+            margin-top: 10px;
+        }
+
+        .user-profile {
+            background: linear-gradient(135deg, #e8eaf6 0%, #f3e5f5 100%);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .user-profile .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .user-profile .avatar {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .user-profile .user-info h3 {
+            color: #333;
+            margin: 0;
+            font-size: 1.1em;
+        }
+
+        .user-profile .user-info p {
+            color: #666;
+            margin: 5px 0 0;
+            font-size: 0.9em;
+        }
+
+        .linked-accounts {
+            margin-top: 20px;
+        }
+
+        .linked-accounts h4 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .social-account-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            background: white;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #e0e0e0;
+            transition: all 0.3s;
+        }
+
+        .social-account-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.15);
+        }
+
+        .social-account-item .account-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .social-account-item .provider-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .social-account-item .provider-icon.google {
+            background: #DB4437;
+        }
+
+        .social-account-item .provider-icon.naver {
+            background: #03C75A;
+        }
+
+        .social-account-item .provider-icon.kakao {
+            background: #FEE500;
+            color: #000;
+        }
+
+        .social-account-item .account-details p {
+            margin: 0;
+        }
+
+        .social-account-item .account-details .provider-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .social-account-item .account-details .account-email {
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        .social-account-item .linked-date {
+            font-size: 0.8em;
+            color: #999;
+        }
+
+        .no-linked-accounts {
+            text-align: center;
+            padding: 30px;
+            color: #888;
+        }
+
+        .no-linked-accounts .icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .no-linked-accounts p {
+            margin: 5px 0;
+        }
+
+        .account-management-hidden {
+            display: none;
+        }
     </style>
 </head>
 
@@ -823,6 +985,36 @@
                     <button class="btn-secondary" onclick="logout()">로그아웃</button>
                 </div>
             </div>
+        </div>
+
+        <!-- 마이페이지 계정 관리 섹션 -->
+        <div id="accountManagementSection" class="card account-management account-management-hidden" style="margin-bottom: 30px;">
+            <h2>계정 관리</h2>
+
+            <div class="user-profile" id="userProfileArea">
+                <div class="profile-header">
+                    <div class="avatar" id="userAvatar">?</div>
+                    <div class="user-info">
+                        <h3 id="userEmail">로그인이 필요합니다</h3>
+                        <p id="userType">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="linked-accounts">
+                <h4>🔗 연동된 소셜 계정</h4>
+                <div id="linkedAccountsList">
+                    <div class="no-linked-accounts">
+                        <div class="icon">🔗</div>
+                        <p>연동된 소셜 계정이 없습니다.</p>
+                        <p style="font-size: 0.85em;">소셜 로그인을 하면 자동으로 연동됩니다.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <button class="btn-outline" onclick="loadLinkedAccounts()">연동 정보 새로고침</button>
         </div>
 
         <div class="token-display" id="tokenDisplay" style="display: none;">
@@ -1098,6 +1290,11 @@
                     document.getElementById('successModal').style.display = 'block';
 
                     showToast('소셜 계정 연동 완료!', 'success');
+
+                    // 계정 관리 페이지로 이동
+                    setTimeout(() => {
+                        navigateToAccountManagement();
+                    }, 500);
                 } else {
                     displayResponse(response.status, data);
                 }
@@ -1250,6 +1447,10 @@
 
                 if (response.ok) {
                     showToast('로그인 성공!', 'success');
+                    // 계정 관리 페이지로 이동
+                    setTimeout(() => {
+                        navigateToAccountManagement();
+                    }, 500);
                 }
             } catch (error) {
                 displayResponse(0, { error: error.message });
@@ -1325,6 +1526,11 @@
 
                 if (response.ok) {
                     showToast('토큰이 갱신되었습니다!', 'success');
+                    // 계정 관리 섹션이 보이면 업데이트
+                    const section = document.getElementById('accountManagementSection');
+                    if (!section.classList.contains('account-management-hidden')) {
+                        loadLinkedAccounts();
+                    }
                 }
             } catch (error) {
                 displayResponse(0, { error: error.message });
@@ -1352,10 +1558,132 @@
                     document.getElementById('refreshTokenInput').value = '';
                     document.getElementById('savedAccessToken').textContent = '';
                     document.getElementById('savedRefreshToken').textContent = '';
+                    // 계정 관리 섹션 숨기기
+                    hideAccountManagement();
                     showToast('로그아웃 되었습니다.', 'success');
                 }
             } catch (error) {
                 displayResponse(0, { error: error.message });
+            }
+        }
+
+        // 연동된 소셜 계정 조회
+        async function loadLinkedAccounts() {
+            if (!accessToken) {
+                showErrorModal(0, '로그인이 필요합니다.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/protected/social-accounts`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                displayResponse(response.status, data);
+
+                if (response.ok && data.data) {
+                    updateAccountManagement(data.data);
+                }
+            } catch (error) {
+                displayResponse(0, { error: error.message });
+            }
+        }
+
+        // 계정 관리 UI 업데이트
+        function updateAccountManagement(data) {
+            const section = document.getElementById('accountManagementSection');
+            section.classList.remove('account-management-hidden');
+
+            // 사용자 정보 업데이트
+            if (data.user) {
+                const email = data.user.email || '-';
+                document.getElementById('userEmail').textContent = email;
+                document.getElementById('userAvatar').textContent = email.charAt(0).toUpperCase();
+
+                let userTypeText = '';
+                if (data.user.user_type === 'KOREAN') {
+                    userTypeText = '한국인 회원';
+                } else if (data.user.user_type === 'FOREIGNER') {
+                    userTypeText = 'Foreigner';
+                } else {
+                    userTypeText = '소셜 로그인 회원';
+                }
+                if (data.user.email_verified) {
+                    userTypeText += ' (인증됨)';
+                }
+                document.getElementById('userType').textContent = userTypeText;
+            }
+
+            // 연동된 소셜 계정 목록 업데이트
+            const listContainer = document.getElementById('linkedAccountsList');
+
+            if (!data.social_accounts || data.social_accounts.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="no-linked-accounts">
+                        <div class="icon">🔗</div>
+                        <p>연동된 소셜 계정이 없습니다.</p>
+                        <p style="font-size: 0.85em;">소셜 로그인을 하면 자동으로 연동됩니다.</p>
+                    </div>
+                `;
+            } else {
+                const providerIcons = {
+                    'google': { class: 'google', label: 'G' },
+                    'naver': { class: 'naver', label: 'N' },
+                    'kakao': { class: 'kakao', label: 'K' }
+                };
+
+                const providerNames = {
+                    'google': 'Google',
+                    'naver': 'Naver',
+                    'kakao': 'Kakao'
+                };
+
+                let html = '';
+                data.social_accounts.forEach(account => {
+                    const icon = providerIcons[account.provider] || { class: '', label: '?' };
+                    const name = providerNames[account.provider] || account.provider;
+
+                    html += `
+                        <div class="social-account-item">
+                            <div class="account-info">
+                                <div class="provider-icon ${icon.class}">${icon.label}</div>
+                                <div class="account-details">
+                                    <p class="provider-name">${name}</p>
+                                    <p class="account-email">${account.email}</p>
+                                </div>
+                            </div>
+                            <span class="linked-date">연동일: ${account.created_at}</span>
+                        </div>
+                    `;
+                });
+                listContainer.innerHTML = html;
+            }
+
+            // 계정 관리 섹션으로 스크롤
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // 계정 관리 섹션 숨기기
+        function hideAccountManagement() {
+            const section = document.getElementById('accountManagementSection');
+            section.classList.add('account-management-hidden');
+            document.getElementById('userEmail').textContent = '로그인이 필요합니다';
+            document.getElementById('userAvatar').textContent = '?';
+            document.getElementById('userType').textContent = '-';
+            document.getElementById('linkedAccountsList').innerHTML = `
+                <div class="no-linked-accounts">
+                    <div class="icon">🔗</div>
+                    <p>연동된 소셜 계정이 없습니다.</p>
+                    <p style="font-size: 0.85em;">소셜 로그인을 하면 자동으로 연동됩니다.</p>
+                </div>
+            `;
+        }
+
+        // 로그인 성공 후 계정 관리 페이지로 이동
+        function navigateToAccountManagement() {
+            if (accessToken) {
+                loadLinkedAccounts();
             }
         }
 
@@ -1444,6 +1772,11 @@
                 document.getElementById('socialLoginSuccessModal').style.display = 'block';
 
                 showToast(`${providerName} 로그인 성공!`, 'success');
+
+                // 계정 관리 페이지로 이동
+                setTimeout(() => {
+                    navigateToAccountManagement();
+                }, 500);
             } else {
                 displayResponse(200, data);
                 showErrorModal(0, '알 수 없는 응답 형식입니다.');
