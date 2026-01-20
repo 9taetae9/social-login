@@ -96,6 +96,7 @@ func main() {
 					"message": "This is a protected route",
 				})
 			})
+			protected.GET("/social-accounts", authHandler.GetLinkedSocialAccounts)
 		}
 	}
 
