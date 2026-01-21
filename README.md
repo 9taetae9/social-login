@@ -69,6 +69,17 @@ Go 언어 기반의 이메일 및 소셜 로그인(Google, Naver, Kakao) 인증 
 - bcrypt 해싱 (cost 10)
 - 최소 8자 이상 검증
 
+### 7. 계정 관리
+- **연동된 소셜 계정 조회**: 현재 계정에 연동된 모든 소셜 계정 목록 확인
+- **소셜 계정 연동 해제**: 연동된 소셜 계정을 개별적으로 해제
+  - 마지막 인증 수단 보호: 비밀번호 없이 유일한 소셜 계정 해제 시 경고
+- **일반 회원 전환**: 소셜 전용 계정에 비밀번호를 설정하여 이메일 로그인 가능하게 전환
+- **회원 탈퇴**: 계정 및 관련 데이터 완전 삭제 (CASCADE)
+
+### 8. 클라이언트 통신
+- **postMessage API**: 소셜 로그인 콜백 결과를 부모 창에 안전하게 전달
+- **팝업 기반 로그인**: 메인 페이지 이동 없이 팝업에서 소셜 로그인 처리
+
 ## 🛠 기술 스택
 
 ### Backend
@@ -306,6 +317,14 @@ http://localhost:8080/api/v1
 |--------|----------|------|----------|
 | GET | `/protected/profile` | 사용자 프로필 조회 | ✅ |
 
+#### 계정 관리
+| Method | Endpoint | 설명 | 인증 필요 |
+|--------|----------|------|----------|
+| GET | `/protected/social-accounts` | 연동된 소셜 계정 목록 조회 | ✅ |
+| DELETE | `/protected/social-accounts/:provider` | 소셜 계정 연동 해제 | ✅ |
+| POST | `/protected/convert-to-email` | 일반 회원 전환 (비밀번호 설정) | ✅ |
+| DELETE | `/protected/account` | 회원 탈퇴 | ✅ |
+
 ### 요청/응답 예시
 
 #### 회원가입 (내국인)
@@ -395,6 +414,99 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
   "phone_number": "01012345678",
   "country_code": "KR",
   "message": "This is a protected route"
+}
+```
+
+#### 연동된 소셜 계정 조회
+```bash
+GET /api/v1/protected/social-accounts
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
+
+**응답 (200 OK)**
+```json
+{
+  "message": "Linked social accounts retrieved successfully",
+  "data": {
+    "email": "user@example.com",
+    "has_password": true,
+    "social_accounts": [
+      {
+        "provider": "google",
+        "email": "user@gmail.com",
+        "linked_at": "2024-01-14T10:00:00Z"
+      },
+      {
+        "provider": "kakao",
+        "email": "user@kakao.com",
+        "linked_at": "2024-01-15T15:30:00Z"
+      }
+    ]
+  }
+}
+```
+
+#### 소셜 계정 연동 해제
+```bash
+DELETE /api/v1/protected/social-accounts/google
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
+
+**응답 (200 OK) - 연동 해제 성공**
+```json
+{
+  "message": "Social account unlinked successfully",
+  "data": {
+    "success": true,
+    "is_last_auth": false,
+    "has_password": true,
+    "social_accounts_count": 1
+  }
+}
+```
+
+**응답 (200 OK) - 마지막 인증 수단 경고**
+```json
+{
+  "message": "Cannot unlink: this is your only authentication method",
+  "data": {
+    "success": false,
+    "is_last_auth": true,
+    "has_password": false,
+    "social_accounts_count": 1
+  }
+}
+```
+
+#### 일반 회원 전환 (비밀번호 설정 후 소셜 연동 해제)
+```bash
+POST /api/v1/protected/convert-to-email
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+Content-Type: application/json
+
+{
+  "provider": "google",
+  "new_password": "newPassword123"
+}
+```
+
+**응답 (200 OK)**
+```json
+{
+  "message": "Account converted to email successfully. Social account unlinked."
+}
+```
+
+#### 회원 탈퇴
+```bash
+DELETE /api/v1/protected/account
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
+
+**응답 (200 OK)**
+```json
+{
+  "message": "Account deleted successfully"
 }
 ```
 
@@ -685,10 +797,11 @@ Postman 컬렉션을 사용하여 모든 API를 테스트할 수 있습니다.
 ### 기능 추가
 - [ ] **SMS 인증 구현**: 전화번호 인증 기능
 - [ ] **비밀번호 찾기/재설정** 기능
-- [ ] **회원 탈퇴** 기능
+- [x] **회원 탈퇴** 기능 ✅
 - [ ] **프로필 이미지 업로드**
 - [ ] **이메일 변경** 기능
-- [ ] **소셜 계정 연동 해제**
+- [x] **소셜 계정 연동 해제** ✅
+- [x] **일반 회원 전환**: 소셜 전용 계정에 비밀번호 설정 ✅
 - [ ] **Apple 소셜 로그인** 추가
 
 ### 보안 강화
