@@ -16,12 +16,16 @@ type UserRepository interface {
 	FindByPhoneNumber(phone string) (*models.User, error)
 	FindByID(id uint) (*models.User, error)
 	UpdateEmailVerified(userId uint) error
+	UpdatePassword(userID uint, passwordHash string) error
+	DeleteUser(userID uint) error
 
 	// 소셜 로그인 관련
 	// 제공자와 식별자로 유저 조회
 	FindSocialAccount(provider, socialID string) (*models.SocialAccount, error)
 	FindSocialAccountsByUserID(userID uint) ([]models.SocialAccount, error)
+	FindSocialAccountByUserIDAndProvider(userID uint, provider string) (*models.SocialAccount, error)
 	CreateSocialAccount(socialAccount *models.SocialAccount) error
+	DeleteSocialAccount(userID uint, provider string) error
 
 	// 기존 계정에 소셜 정보 연동 (계정 통합)
 	UpdateSocialInfo(userID uint, provider, socialID string) error
@@ -327,5 +331,58 @@ func (r *userRepository) DeletePendingSocialLinksByUserID(userID uint) error {
 		return errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to delete pending social links", 500)
 	}
 	slog.Debug("Pending social links deleted for user", "user_id", userID)
+	return nil
+}
+
+// 유저의 특정 소셜 계정 조회
+func (r *userRepository) FindSocialAccountByUserIDAndProvider(userID uint, provider string) (*models.SocialAccount, error) {
+	var socialAccount models.SocialAccount
+	err := r.db.Where("user_id = ? AND provider = ?", userID, provider).First(&socialAccount).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrCodeSocialNotLinked, "Social account not linked", 404)
+		}
+		slog.Error("Database error finding social account by user and provider", "error", err, "user_id", userID, "provider", provider)
+		return nil, errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to find social account", 500)
+	}
+	return &socialAccount, nil
+}
+
+// 유저의 특정 소셜 계정 삭제
+func (r *userRepository) DeleteSocialAccount(userID uint, provider string) error {
+	result := r.db.Where("user_id = ? AND provider = ?", userID, provider).Delete(&models.SocialAccount{})
+	if result.Error != nil {
+		slog.Error("Failed to delete social account", "error", result.Error, "user_id", userID, "provider", provider)
+		return errors.Wrap(result.Error, errors.ErrCodeDBQuery, "Failed to delete social account", 500)
+	}
+	if result.RowsAffected == 0 {
+		return errors.New(errors.ErrCodeSocialNotLinked, "Social account not linked", 404)
+	}
+	slog.Debug("Social account deleted", "user_id", userID, "provider", provider)
+	return nil
+}
+
+// 유저 비밀번호 업데이트
+func (r *userRepository) UpdatePassword(userID uint, passwordHash string) error {
+	err := r.db.Model(&models.User{}).Where("id = ?", userID).Update("password_hash", passwordHash).Error
+	if err != nil {
+		slog.Error("Failed to update password", "error", err, "user_id", userID)
+		return errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to update password", 500)
+	}
+	slog.Debug("Password updated successfully", "user_id", userID)
+	return nil
+}
+
+// 유저 삭제
+func (r *userRepository) DeleteUser(userID uint) error {
+	result := r.db.Delete(&models.User{}, userID)
+	if result.Error != nil {
+		slog.Error("Failed to delete user", "error", result.Error, "user_id", userID)
+		return errors.Wrap(result.Error, errors.ErrCodeDBQuery, "Failed to delete user", 500)
+	}
+	if result.RowsAffected == 0 {
+		return errors.New(errors.ErrCodeUserNotFound, "User not found", 404)
+	}
+	slog.Debug("User deleted successfully", "user_id", userID)
 	return nil
 }
