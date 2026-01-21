@@ -29,6 +29,16 @@ type AuthService interface {
 	ConfirmSocialLinkByPassword(linkToken, password string) (*AuthResponse, error)
 	ConfirmSocialLinkByEmailToken(emailToken string) (*AuthResponse, error)
 	GetLinkedSocialAccounts(userID uint) (*LinkedAccountsResponse, error)
+	UnlinkSocialAccount(userID uint, provider string) (*UnlinkResponse, error)
+	ConvertToEmailAccount(userID uint, provider, newPassword string) error
+	DeleteAccount(userID uint) error
+}
+
+type UnlinkResponse struct {
+	Success        bool `json:"success"`
+	IsLastAuth     bool `json:"is_last_auth"`
+	HasPassword    bool `json:"has_password"`
+	SocialAccounts int  `json:"social_accounts_count"`
 }
 
 type authService struct {
@@ -762,4 +772,141 @@ func (s *authService) GetLinkedSocialAccounts(userID uint) (*LinkedAccountsRespo
 		User:           user,
 		SocialAccounts: accountInfos,
 	}, nil
+}
+
+// UnlinkSocialAccount 소셜 계정 연동 해제
+func (s *authService) UnlinkSocialAccount(userID uint, provider string) (*UnlinkResponse, error) {
+	slog.Info("Unlink social account attempt", "user_id", userID, "provider", provider)
+
+	// 사용자 조회
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 해당 소셜 계정이 연동되어 있는지 확인
+	_, err = s.userRepo.FindSocialAccountByUserIDAndProvider(userID, provider)
+	if err != nil {
+		return nil, err
+	}
+
+	// 연동된 소셜 계정 목록 조회
+	socialAccounts, err := s.userRepo.FindSocialAccountsByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	hasPassword := user.PasswordHash != nil
+	socialAccountCount := len(socialAccounts)
+
+	// 다른 인증 수단이 있는지 확인
+	// Case 1: 비밀번호가 있거나, 다른 소셜 계정이 있으면 즉시 연동 해제
+	if hasPassword || socialAccountCount > 1 {
+		if err := s.userRepo.DeleteSocialAccount(userID, provider); err != nil {
+			slog.Error("Failed to unlink social account", "error", err, "user_id", userID, "provider", provider)
+			return nil, errors.NewInternalError(errors.ErrCodeSocialUnlinkFailed, "Failed to unlink social account", err)
+		}
+
+		slog.Info("Social account unlinked successfully", "user_id", userID, "provider", provider)
+		return &UnlinkResponse{
+			Success:        true,
+			IsLastAuth:     false,
+			HasPassword:    hasPassword,
+			SocialAccounts: socialAccountCount - 1,
+		}, nil
+	}
+
+	// Case 2: 이 소셜 계정이 유일한 인증 수단
+	slog.Warn("Cannot unlink: last authentication method", "user_id", userID, "provider", provider)
+	return &UnlinkResponse{
+		Success:        false,
+		IsLastAuth:     true,
+		HasPassword:    false,
+		SocialAccounts: socialAccountCount,
+	}, nil
+}
+
+// ConvertToEmailAccount 비밀번호 설정 후 소셜 연동 해제 (일반 회원 전환)
+func (s *authService) ConvertToEmailAccount(userID uint, provider, newPassword string) error {
+	slog.Info("Convert to email account attempt", "user_id", userID, "provider", provider)
+
+	// 사용자 조회
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+
+	// 해당 소셜 계정이 연동되어 있는지 확인
+	_, err = s.userRepo.FindSocialAccountByUserIDAndProvider(userID, provider)
+	if err != nil {
+		return err
+	}
+
+	// 비밀번호 해시
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		slog.Error("Failed to hash password", "error", err)
+		return errors.NewInternalError(errors.ErrCodeHashPassword, "Failed to hash password", err)
+	}
+
+	// 트랜잭션: 비밀번호 설정 + 소셜 계정 삭제
+	err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
+		// 비밀번호 설정
+		if err := txRepo.UpdatePassword(userID, hashedPassword); err != nil {
+			return err
+		}
+
+		// 소셜 계정 삭제
+		if err := txRepo.DeleteSocialAccount(userID, provider); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		slog.Error("Failed to convert to email account", "error", err, "user_id", userID)
+		return errors.NewInternalError(errors.ErrCodeSocialUnlinkFailed, "Failed to convert to email account", err)
+	}
+
+	slog.Info("Account converted to email successfully",
+		"user_id", userID,
+		"email", logger.SanitizeEmail(user.Email),
+	)
+	return nil
+}
+
+// DeleteAccount 회원 탈퇴
+func (s *authService) DeleteAccount(userID uint) error {
+	slog.Info("Delete account attempt", "user_id", userID)
+
+	// 사용자 조회 (존재 확인)
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+
+	// 트랜잭션: 관련 데이터 삭제 (CASCADE가 설정되어 있지만 명시적으로 처리)
+	err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
+		// pending social links 삭제
+		_ = txRepo.DeletePendingSocialLinksByUserID(userID)
+
+		// 유저 삭제 (CASCADE로 social_accounts, refresh_tokens 등 자동 삭제)
+		if err := txRepo.DeleteUser(userID); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		slog.Error("Failed to delete account", "error", err, "user_id", userID)
+		return errors.NewInternalError(errors.ErrCodeAccountDeleteFailed, "Failed to delete account", err)
+	}
+
+	slog.Info("Account deleted successfully",
+		"user_id", userID,
+		"email", logger.SanitizeEmail(user.Email),
+	)
+	return nil
 }
