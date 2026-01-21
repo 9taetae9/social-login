@@ -97,6 +97,9 @@ func main() {
 				})
 			})
 			protected.GET("/social-accounts", authHandler.GetLinkedSocialAccounts)
+			protected.DELETE("/social-accounts/:provider", authHandler.UnlinkSocialAccount)
+			protected.POST("/convert-to-email", authHandler.ConvertToEmailAccount)
+			protected.DELETE("/account", authHandler.DeleteAccount)
 		}
 	}
 
