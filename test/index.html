@@ -361,25 +361,44 @@
             background-color: rgba(0, 0, 0, 0.6);
             animation: fadeIn 0.3s;
             backdrop-filter: blur(3px);
+            /* 화면 중앙 정렬을 위한 flexbox */
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* 에러/성공 모달은 다른 모달 위에 표시 */
+        #errorModal,
+        #successModal {
+            z-index: 2000;
         }
 
         .modal-content {
             background-color: #fff;
-            margin: 8% auto;
             padding: 30px;
             border: none;
             width: 90%;
             max-width: 520px;
+            max-height: 85vh;
+            overflow-y: auto;
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             text-align: center;
             position: relative;
             animation: slideIn 0.3s ease-out;
+            /* margin 제거하고 flexbox로 중앙 정렬 */
+            margin: 0;
+        }
+
+        /* 모달이 display: block일 때 flex로 표시 */
+        .modal[style*="display: block"] {
+            display: flex !important;
         }
 
         @keyframes slideIn {
             from {
-                transform: translateY(-50px);
+                transform: translateY(-30px);
                 opacity: 0;
             }
             to {
@@ -1486,9 +1505,6 @@
 
         // 토큰 저장 및 UI 업데이트 공통 함수
         async function saveTokens(access, refresh) {
-            // 새 로그인 시 이전 계정 정보 초기화
-            // hideAccountManagement();
-
             accessToken = access;
             refreshTokenValue = refresh;
 
@@ -2101,32 +2117,6 @@
         // 소셜 로그인 처리 중 플래그 (중복 방지)
         let isProcessingSocialLogin = false;
 
-        // 페이지 로드 시 기존 localStorage 데이터 확인 (같은 탭에서 열린 경우)
-        // function checkPendingSocialLogin() {
-        //     // 이미 처리 중이면 건너뛰기
-        //     if (isProcessingSocialLogin) return;
-
-        //     const stored = localStorage.getItem('socialLoginResult');
-        //     if (stored) {
-        //         try {
-        //             // 먼저 데이터 삭제 (중복 방지)
-        //             localStorage.removeItem('socialLoginResult');
-
-        //             const result = JSON.parse(stored);
-        //             // 60초 이내의 데이터만 처리 (오래된 데이터 무시)
-        //             if (result.type === 'SOCIAL_LOGIN_CALLBACK' &&
-        //                 result.timestamp && (Date.now() - result.timestamp) < 60000) {
-        //                 console.log('Found pending social login result:', result);
-        //                 isProcessingSocialLogin = true;
-        //                 handleSocialLoginCallback(result.provider, result.data);
-        //                 // 처리 완료 후 플래그 해제
-        //                 setTimeout(() => { isProcessingSocialLogin = false; }, 1000);
-        //             }
-        //         } catch (e) {
-        //             console.error('Failed to parse stored social login result:', e);
-        //         }
-        //     }
-        // }
 
         // 소셜 로그인 콜백 처리
         async function handleSocialLoginCallback(provider, data) {
@@ -2184,19 +2174,9 @@
         // // 페이지 로드 시 초기화
         window.addEventListener('load', () => {
             healthCheck();
-            // // 대기 중인 소셜 로그인 결과 확인
-            // checkPendingSocialLogin();
 
-            // // 소셜 로그인 결과를 주기적으로 확인 (1초마다)
-            // setInterval(() => {
-            //     checkPendingSocialLogin();
-            // }, 1000);
         });
 
-        // // 페이지가 포커스를 받을 때도 확인 (팝업에서 돌아온 경우)
-        // window.addEventListener('focus', () => {
-        //     checkPendingSocialLogin();
-        // });
     </script>
 </body>
 
