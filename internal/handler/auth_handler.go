@@ -660,9 +660,7 @@ func (h *AuthHandler) sendSocialCallbackResponse(c *gin.Context, provider string
             var data = %s;
             var provider = '%s';
 
-            console.log('Social login response (link required):', data);
-
-            // localStorage에 결과 저장 (부모 창에서 storage 이벤트로 감지)
+			// 데이터 전송 객체 생성
             var result = {
                 type: 'SOCIAL_LOGIN_CALLBACK',
                 provider: provider,
@@ -670,8 +668,21 @@ func (h *AuthHandler) sendSocialCallbackResponse(c *gin.Context, provider string
                 timestamp: Date.now()
             };
 
-            localStorage.setItem('socialLoginResult', JSON.stringify(result));
-            // 연동 필요 케이스는 자동으로 창을 닫지 않음
+            console.log('Sending message to parent:', result);
+
+            // 부모 창(window.opener)에 메시지 전송
+            if (window.opener) {
+                // '*'는 모든 도메인 허용 (개발 환경용)
+                // 실제 배포 시에는 'http://localhost:5500' 처럼 프론트 주소를 지정
+                window.opener.postMessage(result, '*');
+            } else {
+                console.error('No parent window found.');
+            }
+
+            // 메시지 전송 후 잠시 대기 후 닫기
+            setTimeout(function() {
+                window.close();
+            }, 2000);
         })();
     </script>
 </body>
@@ -746,22 +757,26 @@ func (h *AuthHandler) sendSocialCallbackResponse(c *gin.Context, provider string
             var data = %s;
             var provider = '%s';
 
-            console.log('Social login response:', data);
-
-            // localStorage에 결과 저장 (부모 창에서 storage 이벤트로 감지)
-            var result = {
+			var result = {
                 type: 'SOCIAL_LOGIN_CALLBACK',
                 provider: provider,
                 data: data,
                 timestamp: Date.now()
             };
 
-            localStorage.setItem('socialLoginResult', JSON.stringify(result));
+            console.log('Sending success message to parent:', result);
 
-            // 창 닫기 시도
+            // 부모 창(window.opener)에 메시지 전송
+            if (window.opener) {
+                window.opener.postMessage(result, '*');
+            } else {
+                console.error('No parent window found.');
+            }
+
+            // 메시지 전송 후 닫기
             setTimeout(function() {
                 window.close();
-            }, 1000);
+            }, 2000);
         })();
     </script>
 </body>
