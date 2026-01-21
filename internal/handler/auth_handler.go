@@ -71,6 +71,12 @@ type ConfirmSocialLinkRequest struct {
 	Password  string `json:"password" validate:"required"`
 }
 
+// 일반 회원 전환 요청 구조체
+type ConvertToEmailRequest struct {
+	Provider    string `json:"provider" validate:"required"`
+	NewPassword string `json:"new_password" validate:"required,min=8"`
+}
+
 // ErrorResponse 에러 응답 구조체
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -956,5 +962,86 @@ func (h *AuthHandler) GetLinkedSocialAccounts(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{
 		Message: "Linked social accounts retrieved successfully",
 		Data:    response,
+	})
+}
+
+// UnlinkSocialAccount 소셜 계정 연동 해제 핸들러
+func (h *AuthHandler) UnlinkSocialAccount(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	if userID == 0 {
+		errors.HandleError(c, errors.NewAuthError(errors.ErrCodeInvalidToken, "Invalid user ID"))
+		return
+	}
+
+	provider := c.Param("provider")
+	if provider == "" {
+		errors.HandleError(c, errors.NewValidationError("Provider is required"))
+		return
+	}
+
+	response, err := h.authService.UnlinkSocialAccount(userID, provider)
+	if err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+
+	if response.Success {
+		c.JSON(http.StatusOK, SuccessResponse{
+			Message: "Social account unlinked successfully",
+			Data:    response,
+		})
+	} else {
+		// 마지막 인증 수단인 경우 - 클라이언트가 모달 처리할 수 있도록 정보 반환
+		c.JSON(http.StatusOK, SuccessResponse{
+			Message: "Cannot unlink: this is your only authentication method",
+			Data:    response,
+		})
+	}
+}
+
+// ConvertToEmailAccount 일반 회원 전환 핸들러 (비밀번호 설정 후 소셜 연동 해제)
+func (h *AuthHandler) ConvertToEmailAccount(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	if userID == 0 {
+		errors.HandleError(c, errors.NewAuthError(errors.ErrCodeInvalidToken, "Invalid user ID"))
+		return
+	}
+
+	var req ConvertToEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errors.HandleError(c, errors.NewValidationError("Invalid request body"))
+		return
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		errors.HandleError(c, errors.NewValidationError(err.Error()))
+		return
+	}
+
+	if err := h.authService.ConvertToEmailAccount(userID, req.Provider, req.NewPassword); err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Account converted to email successfully. Social account unlinked.",
+	})
+}
+
+// DeleteAccount 회원 탈퇴 핸들러
+func (h *AuthHandler) DeleteAccount(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	if userID == 0 {
+		errors.HandleError(c, errors.NewAuthError(errors.ErrCodeInvalidToken, "Invalid user ID"))
+		return
+	}
+
+	if err := h.authService.DeleteAccount(userID); err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Account deleted successfully",
 	})
 }
