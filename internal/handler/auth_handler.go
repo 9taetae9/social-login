@@ -317,6 +317,9 @@ func (h *AuthHandler) GoogleCallback(c *gin.Context) {
 		return
 	}
 
+	// OAuth 토큰 저장 (연동 해제 시 외부 API 호출용)
+	h.saveSocialTokens(authResponse.User.ID, "google", token)
+
 	h.sendSocialCallbackResponse(c, "google", authResponse, nil)
 }
 
@@ -428,6 +431,9 @@ func (h *AuthHandler) NaverCallback(c *gin.Context) {
 		return
 	}
 
+	// OAuth 토큰 저장 (연동 해제 시 외부 API 호출용)
+	h.saveSocialTokens(authResponse.User.ID, "naver", token)
+
 	h.sendSocialCallbackResponse(c, "naver", authResponse, nil)
 }
 
@@ -535,6 +541,9 @@ func (h *AuthHandler) KakaoCallback(c *gin.Context) {
 		h.sendSocialCallbackResponse(c, "kakao", nil, err)
 		return
 	}
+
+	// OAuth 토큰 저장 (연동 해제 시 외부 API 호출용)
+	h.saveSocialTokens(authResponse.User.ID, "kakao", token)
 
 	h.sendSocialCallbackResponse(c, "kakao", authResponse, nil)
 }
@@ -1044,4 +1053,33 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{
 		Message: "Account deleted successfully",
 	})
+}
+
+// saveSocialTokens OAuth 토큰을 소셜 계정에 저장하는 헬퍼 함수
+func (h *AuthHandler) saveSocialTokens(userID uint, provider string, token *oauth2.Token) {
+	if token == nil {
+		slog.Warn("No token to save", "user_id", userID, "provider", provider)
+		return
+	}
+
+	accessToken := token.AccessToken
+	var refreshToken *string
+	if token.RefreshToken != "" {
+		refreshToken = &token.RefreshToken
+	}
+
+	var tokenExpiry *int64
+	if !token.Expiry.IsZero() {
+		expiry := token.Expiry.Unix()
+		tokenExpiry = &expiry
+	}
+
+	if err := h.authService.SaveSocialAccountTokens(userID, provider, &accessToken, refreshToken, tokenExpiry); err != nil {
+		// 토큰 저장 실패는 경고만 남기고 로그인 자체는 성공 처리
+		slog.Warn("Failed to save social account tokens (non-critical)",
+			"error", err,
+			"user_id", userID,
+			"provider", provider,
+		)
+	}
 }

@@ -32,6 +32,8 @@ type AuthService interface {
 	UnlinkSocialAccount(userID uint, provider string) (*UnlinkResponse, error)
 	ConvertToEmailAccount(userID uint, provider, newPassword string) error
 	DeleteAccount(userID uint) error
+	// OAuth 토큰 관련
+	SaveSocialAccountTokens(userID uint, provider string, accessToken, refreshToken *string, tokenExpiry *int64) error
 }
 
 type UnlinkResponse struct {
@@ -42,8 +44,9 @@ type UnlinkResponse struct {
 }
 
 type authService struct {
-	userRepo repository.UserRepository
-	cfg      *config.Config
+	userRepo           repository.UserRepository
+	cfg                *config.Config
+	oauthRevokeService OAuthRevokeService
 }
 
 type AuthResponse struct {
@@ -65,8 +68,9 @@ type LinkedAccountsResponse struct {
 
 func NewAuthService(userRepo repository.UserRepository, cfg *config.Config) AuthService {
 	return &authService{
-		userRepo: userRepo,
-		cfg:      cfg,
+		userRepo:           userRepo,
+		cfg:                cfg,
+		oauthRevokeService: NewOAuthRevokeService(cfg),
 	}
 }
 
@@ -785,7 +789,7 @@ func (s *authService) UnlinkSocialAccount(userID uint, provider string) (*Unlink
 	}
 
 	// 해당 소셜 계정이 연동되어 있는지 확인
-	_, err = s.userRepo.FindSocialAccountByUserIDAndProvider(userID, provider)
+	socialAccount, err := s.userRepo.FindSocialAccountByUserIDAndProvider(userID, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -802,6 +806,29 @@ func (s *authService) UnlinkSocialAccount(userID uint, provider string) (*Unlink
 	// 다른 인증 수단이 있는지 확인
 	// Case 1: 비밀번호가 있거나, 다른 소셜 계정이 있으면 즉시 연동 해제
 	if hasPassword || socialAccountCount > 1 {
+		// 외부 OAuth 제공자에 토큰 revoke 요청 (Best effort)
+		if socialAccount.AccessToken != nil && *socialAccount.AccessToken != "" {
+			if err := s.oauthRevokeService.RevokeToken(provider, *socialAccount.AccessToken, socialAccount.RefreshToken); err != nil {
+				// 외부 API 호출 실패는 경고만 남기고 계속 진행
+				slog.Warn("Failed to revoke external OAuth token (continuing with unlink)",
+					"error", err,
+					"user_id", userID,
+					"provider", provider,
+				)
+			} else {
+				slog.Info("External OAuth token revoked successfully",
+					"user_id", userID,
+					"provider", provider,
+				)
+			}
+		} else {
+			slog.Warn("No access token stored for social account, skipping external revoke",
+				"user_id", userID,
+				"provider", provider,
+			)
+		}
+
+		// DB에서 소셜 계정 삭제
 		if err := s.userRepo.DeleteSocialAccount(userID, provider); err != nil {
 			slog.Error("Failed to unlink social account", "error", err, "user_id", userID, "provider", provider)
 			return nil, errors.NewInternalError(errors.ErrCodeSocialUnlinkFailed, "Failed to unlink social account", err)
@@ -837,7 +864,7 @@ func (s *authService) ConvertToEmailAccount(userID uint, provider, newPassword s
 	}
 
 	// 해당 소셜 계정이 연동되어 있는지 확인
-	_, err = s.userRepo.FindSocialAccountByUserIDAndProvider(userID, provider)
+	socialAccount, err := s.userRepo.FindSocialAccountByUserIDAndProvider(userID, provider)
 	if err != nil {
 		return err
 	}
@@ -847,6 +874,22 @@ func (s *authService) ConvertToEmailAccount(userID uint, provider, newPassword s
 	if err != nil {
 		slog.Error("Failed to hash password", "error", err)
 		return errors.NewInternalError(errors.ErrCodeHashPassword, "Failed to hash password", err)
+	}
+
+	// 외부 OAuth 제공자에 토큰 revoke 요청 (Best effort)
+	if socialAccount.AccessToken != nil && *socialAccount.AccessToken != "" {
+		if err := s.oauthRevokeService.RevokeToken(provider, *socialAccount.AccessToken, socialAccount.RefreshToken); err != nil {
+			slog.Warn("Failed to revoke external OAuth token (continuing with conversion)",
+				"error", err,
+				"user_id", userID,
+				"provider", provider,
+			)
+		} else {
+			slog.Info("External OAuth token revoked successfully",
+				"user_id", userID,
+				"provider", provider,
+			)
+		}
 	}
 
 	// 트랜잭션: 비밀번호 설정 + 소셜 계정 삭제
@@ -886,6 +929,27 @@ func (s *authService) DeleteAccount(userID uint) error {
 		return err
 	}
 
+	// 연동된 소셜 계정들의 외부 OAuth 토큰 revoke (Best effort)
+	socialAccounts, err := s.userRepo.FindSocialAccountsByUserID(userID)
+	if err == nil && len(socialAccounts) > 0 {
+		for _, sa := range socialAccounts {
+			if sa.AccessToken != nil && *sa.AccessToken != "" {
+				if err := s.oauthRevokeService.RevokeToken(sa.Provider, *sa.AccessToken, sa.RefreshToken); err != nil {
+					slog.Warn("Failed to revoke external OAuth token during account deletion",
+						"error", err,
+						"user_id", userID,
+						"provider", sa.Provider,
+					)
+				} else {
+					slog.Info("External OAuth token revoked during account deletion",
+						"user_id", userID,
+						"provider", sa.Provider,
+					)
+				}
+			}
+		}
+	}
+
 	// 트랜잭션: 관련 데이터 삭제 (CASCADE가 설정되어 있지만 명시적으로 처리)
 	err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
 		// pending social links 삭제
@@ -907,6 +971,39 @@ func (s *authService) DeleteAccount(userID uint) error {
 	slog.Info("Account deleted successfully",
 		"user_id", userID,
 		"email", logger.SanitizeEmail(user.Email),
+	)
+	return nil
+}
+
+// SaveSocialAccountTokens OAuth 토큰을 소셜 계정에 저장
+func (s *authService) SaveSocialAccountTokens(userID uint, provider string, accessToken, refreshToken *string, tokenExpiry *int64) error {
+	slog.Debug("Saving social account tokens",
+		"user_id", userID,
+		"provider", provider,
+		"has_access_token", accessToken != nil,
+		"has_refresh_token", refreshToken != nil,
+	)
+
+	if refreshToken == nil || *refreshToken == "" {
+		existingAccount, err := s.userRepo.FindSocialAccountByUserIDAndProvider(userID, provider)
+		if err == nil && existingAccount.RefreshToken != nil && *existingAccount.RefreshToken != "" {
+			slog.Debug("Preserving existing refresh token", "user_id", userID, "provider", provider)
+			refreshToken = existingAccount.RefreshToken
+		}
+	}
+
+	if err := s.userRepo.UpdateSocialAccountTokens(userID, provider, accessToken, refreshToken, tokenExpiry); err != nil {
+		slog.Error("Failed to save social account tokens",
+			"error", err,
+			"user_id", userID,
+			"provider", provider,
+		)
+		return err
+	}
+
+	slog.Info("Social account tokens saved successfully",
+		"user_id", userID,
+		"provider", provider,
 	)
 	return nil
 }
