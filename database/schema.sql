@@ -98,3 +98,11 @@ CREATE TABLE pending_social_links (
     INDEX idx_pending_link_token (link_token),
     INDEX idx_pending_email_token (email_token)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+
+
+ALTER TABLE social_accounts
+  ADD COLUMN access_token VARCHAR(2048),
+  ADD COLUMN refresh_token VARCHAR(2048),
+  ADD COLUMN token_expiry BIGINT,
+  ADD COLUMN updated_at DATETIME;

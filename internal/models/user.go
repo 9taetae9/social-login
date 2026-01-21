@@ -30,12 +30,16 @@ func (User) TableName() string {
 }
 
 type SocialAccount struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"not null;index" json:"user_id"`
-	Provider  string    `gorm:"not null;size:20" json:"provider"`
-	SocialID  string    `gorm:"not null;size:255" json:"social_id"`
-	Email     string    `gorm:"size:255" json:"email"` // 소셜 이메일
-	CreatedAt time.Time `json:"created_at"`
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	UserID       uint      `gorm:"not null;index" json:"user_id"`
+	Provider     string    `gorm:"not null;size:20" json:"provider"`
+	SocialID     string    `gorm:"not null;size:255" json:"social_id"`
+	Email        string    `gorm:"size:255" json:"email"`                  // 소셜 이메일
+	AccessToken  *string   `gorm:"size:2048" json:"-"`                     // OAuth Access Token (연동 해제용)
+	RefreshToken *string   `gorm:"size:2048" json:"-"`                     // OAuth Refresh Token (토큰 갱신용)
+	TokenExpiry  *int64    `gorm:"" json:"-"`                              // 토큰 만료 시간 (Unix timestamp)
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 func (SocialAccount) TableName() string {

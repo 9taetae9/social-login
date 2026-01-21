@@ -25,6 +25,7 @@ type UserRepository interface {
 	FindSocialAccountsByUserID(userID uint) ([]models.SocialAccount, error)
 	FindSocialAccountByUserIDAndProvider(userID uint, provider string) (*models.SocialAccount, error)
 	CreateSocialAccount(socialAccount *models.SocialAccount) error
+	UpdateSocialAccountTokens(userID uint, provider string, accessToken, refreshToken *string, tokenExpiry *int64) error
 	DeleteSocialAccount(userID uint, provider string) error
 
 	// 기존 계정에 소셜 정보 연동 (계정 통합)
@@ -359,6 +360,25 @@ func (r *userRepository) DeleteSocialAccount(userID uint, provider string) error
 		return errors.New(errors.ErrCodeSocialNotLinked, "Social account not linked", 404)
 	}
 	slog.Debug("Social account deleted", "user_id", userID, "provider", provider)
+	return nil
+}
+
+// 소셜 계정 토큰 업데이트
+func (r *userRepository) UpdateSocialAccountTokens(userID uint, provider string, accessToken, refreshToken *string, tokenExpiry *int64) error {
+	updates := map[string]interface{}{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+		"token_expiry":  tokenExpiry,
+	}
+	result := r.db.Model(&models.SocialAccount{}).Where("user_id = ? AND provider = ?", userID, provider).Updates(updates)
+	if result.Error != nil {
+		slog.Error("Failed to update social account tokens", "error", result.Error, "user_id", userID, "provider", provider)
+		return errors.Wrap(result.Error, errors.ErrCodeDBQuery, "Failed to update social account tokens", 500)
+	}
+	if result.RowsAffected == 0 {
+		return errors.New(errors.ErrCodeSocialNotLinked, "Social account not linked", 404)
+	}
+	slog.Debug("Social account tokens updated", "user_id", userID, "provider", provider)
 	return nil
 }
 
