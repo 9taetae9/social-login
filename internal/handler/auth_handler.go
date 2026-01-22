@@ -77,6 +77,23 @@ type ConvertToEmailRequest struct {
 	NewPassword string `json:"new_password" validate:"required,min=8"`
 }
 
+// 비밀번호 변경 요청 구조체
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password" validate:"required,min=8"`
+}
+
+// 비밀번호 재설정 요청 구조체 (이메일로 링크 발송)
+type ForgotPasswordRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+// 비밀번호 재설정 구조체 (새 비밀번호 설정)
+type ResetPasswordRequest struct {
+	Token       string `json:"token" validate:"required"`
+	NewPassword string `json:"new_password" validate:"required,min=8"`
+}
+
 // ErrorResponse 에러 응답 구조체
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -1512,4 +1529,95 @@ func (h *AuthHandler) saveSocialTokens(userID uint, provider string, token *oaut
 			"provider", provider,
 		)
 	}
+}
+
+// ChangePassword 비밀번호 변경 핸들러 (로그인된 사용자)
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	if userID == 0 {
+		errors.HandleError(c, errors.NewAuthError(errors.ErrCodeInvalidToken, "Invalid user ID"))
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errors.HandleError(c, errors.NewValidationError("Invalid request body"))
+		return
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		errors.HandleError(c, errors.NewValidationError(err.Error()))
+		return
+	}
+
+	if err := h.authService.ChangePassword(userID, req.CurrentPassword, req.NewPassword); err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Password changed successfully",
+	})
+}
+
+// ForgotPassword 비밀번호 재설정 요청 핸들러 (이메일 발송)
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errors.HandleError(c, errors.NewValidationError("Invalid request body"))
+		return
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		errors.HandleError(c, errors.NewValidationError(err.Error()))
+		return
+	}
+
+	// 보안상 항상 성공 응답 (이메일 존재 여부 노출 방지)
+	_ = h.authService.RequestPasswordReset(req.Email)
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "If an account with that email exists, a password reset link has been sent.",
+	})
+}
+
+// ValidateResetToken 비밀번호 재설정 토큰 검증 핸들러
+func (h *AuthHandler) ValidateResetToken(c *gin.Context) {
+	token := c.Param("token")
+	if token == "" {
+		errors.HandleError(c, errors.NewValidationError("Reset token is required"))
+		return
+	}
+
+	if err := h.authService.ValidatePasswordResetToken(token); err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Token is valid",
+	})
+}
+
+// ResetPassword 비밀번호 재설정 핸들러 (새 비밀번호 설정)
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errors.HandleError(c, errors.NewValidationError("Invalid request body"))
+		return
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		errors.HandleError(c, errors.NewValidationError(err.Error()))
+		return
+	}
+
+	if err := h.authService.ResetPassword(req.Token, req.NewPassword); err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Password has been reset successfully. You can now log in with your new password.",
+	})
 }
