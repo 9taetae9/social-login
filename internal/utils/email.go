@@ -114,3 +114,65 @@ func SendSocialLinkVerificationEmail(to, emailToken, provider, appURL string, cf
 
 	return nil
 }
+
+// 비밀번호 재설정 이메일 발송
+func SendPasswordResetEmail(to, token, frontendURL string, cfg EmailConfig) error {
+	m := gomail.NewMessage()
+	m.SetHeader("From", cfg.FromEmail)
+	m.SetHeader("To", to)
+	m.SetHeader("Subject", "[Password Reset] Reset your password")
+
+	// 프론트엔드 비밀번호 재설정 페이지 URL
+	resetURL := fmt.Sprintf("%s/reset-password.html?token=%s", frontendURL, token)
+
+	body := fmt.Sprintf(`
+	<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+		<div style="text-align: center; margin-bottom: 30px;">
+			<h1 style="color: #667eea; margin: 0;">Password Reset</h1>
+			<p style="color: #888; font-size: 14px;">We received a request to reset your password</p>
+		</div>
+
+		<h2 style="color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Reset Your Password</h2>
+
+		<p style="color: #555; line-height: 1.6;">Hello,</p>
+		<p style="color: #555; line-height: 1.6;">We received a request to reset the password for your account. Click the button below to create a new password:</p>
+
+		<p style="margin: 30px 0; text-align: center;">
+			<a href="%s" style="background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 14px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Reset Password</a>
+		</p>
+
+		<p style="color: #555; line-height: 1.6;">Or copy and paste this URL into your browser:</p>
+		<p style="background: #f5f5f5; padding: 12px; border-radius: 4px; word-break: break-all; font-size: 13px; color: #667eea;">%s</p>
+
+		<div style="background: linear-gradient(135deg, #fff3cd 0%%, #ffeeba 100%%); border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
+			<p style="color: #856404; margin: 0;"><strong>⏰ This link will expire in 1 hour.</strong></p>
+		</div>
+
+		<div style="background: linear-gradient(135deg, #f8d7da 0%%, #f5c6cb 100%%); border-left: 4px solid #dc3545; padding: 15px; margin: 20px 0; border-radius: 4px;">
+			<p style="color: #721c24; margin: 0;"><strong>⚠️ Security Notice:</strong> If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
+		</div>
+
+		<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+
+		<p style="color: #888; font-size: 12px; line-height: 1.6;">
+			This is an automated message, please do not reply.<br>
+			If you continue to receive these emails, please contact our support team.
+		</p>
+	</div>
+    `, resetURL, resetURL)
+
+	m.SetBody("text/html", body)
+
+	port := 587
+	if cfg.SMTPPort != "" {
+		fmt.Sscanf(cfg.SMTPPort, "%d", &port)
+	}
+
+	d := gomail.NewDialer(cfg.SMTPHost, port, cfg.SMTPUsername, cfg.SMTPPassword)
+
+	if err := d.DialAndSend(m); err != nil {
+		return fmt.Errorf("failed to send password reset email: %w", err)
+	}
+
+	return nil
+}
