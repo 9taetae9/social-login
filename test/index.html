@@ -1122,12 +1122,18 @@
 
                 <div class="divider"></div>
 
-                <button class="btn-outline" onclick="loadLinkedAccounts()">연동 정보 새로고침</button>
+                <div class="btn-group">
+                    <button class="btn-outline" onclick="loadLinkedAccounts()">연동 정보 새로고침</button>
+                    <button class="btn-danger" onclick="logout()">로그아웃</button>
+                </div>
             </div>
         </div>
 
         <div class="token-display" id="tokenDisplay" style="display: none;">
-            <h3>현재 활성화된 세션</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">현재 활성화된 세션</h3>
+                <button class="btn-danger" style="width: auto; padding: 8px 20px;" onclick="logout()">로그아웃</button>
+            </div>
             <p><strong>Access Token:</strong> <span id="savedAccessToken"></span></p>
             <p><strong>Refresh Token:</strong> <span id="savedRefreshToken"></span></p>
         </div>
@@ -1593,6 +1599,10 @@
             accessToken = access;
             refreshTokenValue = refresh;
 
+            // localStorage에 토큰 저장 (새로고침 시에도 유지)
+            localStorage.setItem('accessToken', access);
+            localStorage.setItem('refreshToken', refresh);
+
             document.getElementById('savedAccessToken').textContent = accessToken.substring(0, 50) + '...';
             document.getElementById('savedRefreshToken').textContent = refreshTokenValue.substring(0, 50) + '...';
             document.getElementById('tokenDisplay').style.display = 'block';
@@ -1604,6 +1614,37 @@
 
             // 새 토큰으로 연동된 계정 정보 즉시 로드 (await 추가)
             await loadLinkedAccounts();
+        }
+
+        // localStorage에서 토큰 복원
+        function restoreTokensFromStorage() {
+            const storedAccess = localStorage.getItem('accessToken');
+            const storedRefresh = localStorage.getItem('refreshToken');
+
+            if (storedAccess && storedRefresh) {
+                accessToken = storedAccess;
+                refreshTokenValue = storedRefresh;
+
+                document.getElementById('savedAccessToken').textContent = accessToken.substring(0, 50) + '...';
+                document.getElementById('savedRefreshToken').textContent = refreshTokenValue.substring(0, 50) + '...';
+                document.getElementById('tokenDisplay').style.display = 'block';
+
+                document.getElementById('protectedToken').value = accessToken;
+                document.getElementById('refreshTokenInput').value = refreshTokenValue;
+
+                // 연동된 계정 정보 로드
+                loadLinkedAccounts();
+
+                console.log('Session restored from localStorage');
+                return true;
+            }
+            return false;
+        }
+
+        // localStorage에서 토큰 삭제
+        function clearTokensFromStorage() {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
         }
 
         // 소셜 로그인 결과 JSON 파싱 함수
@@ -1857,8 +1898,12 @@
         }
 
         async function logout() {
-            const token = document.getElementById('refreshTokenInput').value;
-            if (!token) { showErrorModal(0, 'Refresh Token을 입력하세요'); return; }
+            // 내부 저장된 토큰 또는 입력 필드의 토큰 사용
+            const token = refreshTokenValue || document.getElementById('refreshTokenInput').value;
+            if (!token) {
+                showErrorModal(0, '로그아웃할 세션이 없습니다. 먼저 로그인해주세요.');
+                return;
+            }
 
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
@@ -1870,8 +1915,11 @@
                 displayResponse(response.status, data);
 
                 if (response.ok) {
+                    // 세션 초기화
                     accessToken = '';
                     refreshTokenValue = '';
+                    // localStorage에서 토큰 삭제
+                    clearTokensFromStorage();
                     document.getElementById('tokenDisplay').style.display = 'none';
                     document.getElementById('protectedToken').value = '';
                     document.getElementById('refreshTokenInput').value = '';
@@ -1880,6 +1928,8 @@
                     // 계정 관리 섹션 숨기기
                     hideAccountManagement();
                     showToast('로그아웃 되었습니다.', 'success');
+                    // 페이지 상단으로 스크롤
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
             } catch (error) {
                 displayResponse(0, { error: error.message });
@@ -2169,6 +2219,8 @@
                     // 로그아웃 처리
                     accessToken = '';
                     refreshTokenValue = '';
+                    // localStorage에서 토큰 삭제
+                    clearTokensFromStorage();
                     document.getElementById('tokenDisplay').style.display = 'none';
                     document.getElementById('protectedToken').value = '';
                     document.getElementById('refreshTokenInput').value = '';
@@ -2261,10 +2313,15 @@
             }
         }
 
-        // // 페이지 로드 시 초기화
+        // 페이지 로드 시 초기화
         window.addEventListener('load', () => {
             healthCheck();
 
+            // localStorage에서 토큰 복원 (새로고침 시 세션 유지)
+            const restored = restoreTokensFromStorage();
+            if (restored) {
+                showToast('이전 세션이 복원되었습니다.', 'success');
+            }
         });
 
     </script>
