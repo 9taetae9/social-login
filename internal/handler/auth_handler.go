@@ -953,6 +953,34 @@ func (h *AuthHandler) ConfirmSocialLinkByEmailToken(c *gin.Context) {
 	})
 }
 
+// SendSocialLinkEmailRequest 소셜 연동 이메일 발송 요청 구조체
+type SendSocialLinkEmailRequest struct {
+	LinkToken string `json:"link_token" validate:"required"`
+}
+
+// SendSocialLinkEmail 소셜 연동 이메일 발송 핸들러
+func (h *AuthHandler) SendSocialLinkEmail(c *gin.Context) {
+	var req SendSocialLinkEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errors.HandleError(c, errors.NewValidationError("Invalid request body"))
+		return
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		errors.HandleError(c, errors.NewValidationError(err.Error()))
+		return
+	}
+
+	if err := h.authService.SendSocialLinkEmail(req.LinkToken); err != nil {
+		errors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "Verification email sent successfully",
+	})
+}
+
 // generateRandomState CSRF 방지용 랜덤 state 생성
 func generateRandomState() (string, error) {
 	b := make([]byte, 32)

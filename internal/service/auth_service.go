@@ -35,6 +35,7 @@ type AuthService interface {
 	ResendVerificationEmail(email string) error
 	ConfirmSocialLinkByPassword(linkToken, password string) (*AuthResponse, error)
 	ConfirmSocialLinkByEmailToken(emailToken string) (*AuthResponse, error)
+	SendSocialLinkEmail(linkToken string) error // 소셜 연동 이메일 발송 요청
 	GetLinkedSocialAccounts(userID uint) (*LinkedAccountsResponse, error)
 	UnlinkSocialAccount(userID uint, provider string) (*UnlinkResponse, error)
 	ConvertToEmailAccount(userID uint, provider, newPassword string) error
@@ -319,36 +320,12 @@ func (s *authService) SocialLogin(email, provider, socialID string, tokens *Soci
 			return nil, errors.NewInternalError(errors.ErrCodeSocialLinkFailed, "Failed to initiate social link verification", err)
 		}
 
-		// 이메일 인증 메일 발송
-		emailSent := false
-		emailCfg := utils.EmailConfig{
-			SMTPHost:     s.cfg.Email.SMTPHost,
-			SMTPPort:     s.cfg.Email.SMTPPort,
-			SMTPUsername: s.cfg.Email.SMTPUsername,
-			SMTPPassword: s.cfg.Email.SMTPPassword,
-			FromEmail:    s.cfg.Email.FromEmail,
-		}
-
-		if err := utils.SendSocialLinkVerificationEmail(email, emailToken, provider, s.cfg.App.URL, emailCfg); err != nil {
-			slog.Warn("Failed to send social link verification email",
-				"error", err,
-				"email", logger.SanitizeEmail(email),
-			)
-		} else {
-			emailSent = true
-			slog.Info("Social link verification email sent",
-				"email", logger.SanitizeEmail(email),
-				"provider", provider,
-			)
-		}
-
 		slog.Info("Pending social link created, verification required",
 			"user_id", user.ID,
 			"provider", provider,
-			"email_sent", emailSent,
 		)
 
-		// 검증 필요 응답 반환
+		// 검증 필요 응답 반환 (이메일은 사용자가 요청 시에만 발송)
 		return nil, errors.NewConflictErrorWithData(
 			errors.ErrCodeSocialLinkVerificationRequired,
 			"Account verification required to link social account",
@@ -356,7 +333,6 @@ func (s *authService) SocialLogin(email, provider, socialID string, tokens *Soci
 				"link_token":   linkToken,
 				"email":        email,
 				"provider":     provider,
-				"email_sent":   emailSent,
 				"has_password": user.PasswordHash != nil,
 			},
 		)
@@ -763,6 +739,54 @@ func (s *authService) ResendVerificationEmail(email string) error {
 	}
 
 	slog.Info("Verification email resent successfully", "email", logger.SanitizeEmail(email))
+	return nil
+}
+
+// SendSocialLinkEmail 소셜 연동 이메일 발송 (사용자 요청 시에만)
+func (s *authService) SendSocialLinkEmail(linkToken string) error {
+	slog.Info("Send social link email attempt")
+
+	// PendingSocialLink 조회
+	pendingLink, err := s.userRepo.FindPendingSocialLinkByToken(linkToken)
+	if err != nil {
+		return err
+	}
+
+	// 만료 확인
+	if time.Now().After(pendingLink.ExpiresAt) {
+		_ = s.userRepo.DeletePendingSocialLink(pendingLink.ID)
+		slog.Warn("Social link token expired", "link_id", pendingLink.ID)
+		return errors.New(errors.ErrCodeSocialLinkExpired, "Social link token has expired", 400)
+	}
+
+	// email_token이 없으면 에러
+	if pendingLink.EmailToken == nil || *pendingLink.EmailToken == "" {
+		slog.Error("No email token found for pending link", "link_id", pendingLink.ID)
+		return errors.NewInternalError(errors.ErrCodeSocialLinkFailed, "Email token not found", nil)
+	}
+
+	// 이메일 발송
+	emailCfg := utils.EmailConfig{
+		SMTPHost:     s.cfg.Email.SMTPHost,
+		SMTPPort:     s.cfg.Email.SMTPPort,
+		SMTPUsername: s.cfg.Email.SMTPUsername,
+		SMTPPassword: s.cfg.Email.SMTPPassword,
+		FromEmail:    s.cfg.Email.FromEmail,
+	}
+
+	if err := utils.SendSocialLinkVerificationEmail(pendingLink.Email, *pendingLink.EmailToken, pendingLink.Provider, s.cfg.App.URL, emailCfg); err != nil {
+		slog.Error("Failed to send social link verification email",
+			"error", err,
+			"email", logger.SanitizeEmail(pendingLink.Email),
+		)
+		return errors.NewInternalError(errors.ErrCodeEmailSendFailed, "Failed to send verification email", err)
+	}
+
+	slog.Info("Social link verification email sent",
+		"email", logger.SanitizeEmail(pendingLink.Email),
+		"provider", pendingLink.Provider,
+	)
+
 	return nil
 }
 

@@ -70,6 +70,7 @@ func main() {
 			auth.POST("/resend-verify", authHandler.ResendVerificationEmail)
 			auth.POST("/confirm-social-link", authHandler.ConfirmSocialLinkByPassword)
 			auth.GET("/confirm-social-link/:token", authHandler.ConfirmSocialLinkByEmailToken)
+			auth.POST("/send-social-link-email", authHandler.SendSocialLinkEmail)
 
 			// 인증 필요 엔드포인트
 			auth.POST("/logout", authHandler.Logout)
