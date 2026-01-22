@@ -74,16 +74,19 @@ func (RefreshToken) TableName() string {
 }
 
 type PendingSocialLink struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	UserID     uint      `gorm:"not null;index" json:"user_id"`
-	Provider   string    `gorm:"not null;size:20" json:"provider"`
-	SocialID   string    `gorm:"not null;size:255" json:"social_id"`
-	Email      string    `gorm:"not null;size:255" json:"email"`
-	LinkToken  string    `gorm:"uniqueIndex;not null;size:255" json:"link_token"`
-	EmailToken *string   `gorm:"uniqueIndex;size:255" json:"email_token"`
-	ExpiresAt  time.Time `gorm:"not null" json:"expires_at"`
-	CreatedAt  time.Time `json:"created_at"`
-	User       User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	UserID       uint      `gorm:"not null;index" json:"user_id"`
+	Provider     string    `gorm:"not null;size:20" json:"provider"`
+	SocialID     string    `gorm:"not null;size:255" json:"social_id"`
+	Email        string    `gorm:"not null;size:255" json:"email"`
+	LinkToken    string    `gorm:"uniqueIndex;not null;size:255" json:"link_token"`
+	EmailToken   *string   `gorm:"uniqueIndex;size:255" json:"email_token"`
+	AccessToken  *string   `gorm:"size:2048" json:"-"` // OAuth Access Token (연동 완료 시 SocialAccount로 복사)
+	RefreshToken *string   `gorm:"size:2048" json:"-"` // OAuth Refresh Token
+	TokenExpiry  *int64    `gorm:"" json:"-"`          // 토큰 만료 시간 (Unix timestamp)
+	ExpiresAt    time.Time `gorm:"not null" json:"expires_at"`
+	CreatedAt    time.Time `json:"created_at"`
+	User         User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
 }
 
 func (PendingSocialLink) TableName() string {

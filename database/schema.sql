@@ -106,3 +106,8 @@ ALTER TABLE social_accounts
   ADD COLUMN refresh_token VARCHAR(2048),
   ADD COLUMN token_expiry BIGINT,
   ADD COLUMN updated_at DATETIME;
+
+ALTER TABLE pending_social_links                                                
+  ADD COLUMN access_token VARCHAR(2048) NULL,
+  ADD COLUMN refresh_token VARCHAR(2048) NULL,
+  ADD COLUMN token_expiry BIGINT NULL;

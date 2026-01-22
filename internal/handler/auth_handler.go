@@ -310,8 +310,11 @@ func (h *AuthHandler) GoogleCallback(c *gin.Context) {
 	// sub (subject)가 Google 유저 고유 ID
 	googleID := claims.Subject
 
+	// OAuth 토큰 정보 준비
+	socialTokens := h.buildSocialLoginTokens(token)
+
 	// Service 계층의 SocialLogin 호출
-	authResponse, err := h.authService.SocialLogin(claims.Email, "google", googleID)
+	authResponse, err := h.authService.SocialLogin(claims.Email, "google", googleID, socialTokens)
 	if err != nil {
 		h.sendSocialCallbackResponse(c, "google", nil, err)
 		return
@@ -424,8 +427,11 @@ func (h *AuthHandler) NaverCallback(c *gin.Context) {
 		return
 	}
 
+	// OAuth 토큰 정보 준비
+	socialTokens := h.buildSocialLoginTokens(token)
+
 	// Service 계층의 SocialLogin 호출
-	authResponse, err := h.authService.SocialLogin(naverUser.Response.Email, "naver", naverUser.Response.ID)
+	authResponse, err := h.authService.SocialLogin(naverUser.Response.Email, "naver", naverUser.Response.ID, socialTokens)
 	if err != nil {
 		h.sendSocialCallbackResponse(c, "naver", nil, err)
 		return
@@ -535,8 +541,11 @@ func (h *AuthHandler) KakaoCallback(c *gin.Context) {
 	// sub (subject)가 Kakao 유저 고유 ID
 	kakaoID := claims.Subject
 
+	// OAuth 토큰 정보 준비
+	socialTokens := h.buildSocialLoginTokens(token)
+
 	// Service 계층의 SocialLogin 호출
-	authResponse, err := h.authService.SocialLogin(claims.Email, "kakao", kakaoID)
+	authResponse, err := h.authService.SocialLogin(claims.Email, "kakao", kakaoID, socialTokens)
 	if err != nil {
 		h.sendSocialCallbackResponse(c, "kakao", nil, err)
 		return
@@ -1053,6 +1062,28 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{
 		Message: "Account deleted successfully",
 	})
+}
+
+// buildSocialLoginTokens OAuth 토큰을 SocialLoginTokens 구조체로 변환하는 헬퍼 함수
+func (h *AuthHandler) buildSocialLoginTokens(token *oauth2.Token) *service.SocialLoginTokens {
+	if token == nil {
+		return nil
+	}
+
+	tokens := &service.SocialLoginTokens{
+		AccessToken: &token.AccessToken,
+	}
+
+	if token.RefreshToken != "" {
+		tokens.RefreshToken = &token.RefreshToken
+	}
+
+	if !token.Expiry.IsZero() {
+		expiry := token.Expiry.Unix()
+		tokens.TokenExpiry = &expiry
+	}
+
+	return tokens
 }
 
 // saveSocialTokens OAuth 토큰을 소셜 계정에 저장하는 헬퍼 함수

@@ -18,10 +18,17 @@ type RegisterResponse struct {
 	User    *models.User `json:"user"`
 }
 
+// SocialLoginTokens OAuth 토큰 정보 (소셜 로그인 시 전달)
+type SocialLoginTokens struct {
+	AccessToken  *string
+	RefreshToken *string
+	TokenExpiry  *int64
+}
+
 type AuthService interface {
 	Register(email, password, userType, phoneNumber string) (*RegisterResponse, error)
 	Login(email, password string) (*AuthResponse, error)
-	SocialLogin(email, provider, socialID string) (*AuthResponse, error)
+	SocialLogin(email, provider, socialID string, tokens *SocialLoginTokens) (*AuthResponse, error)
 	RefreshToken(refreshToken string) (*AuthResponse, error)
 	Logout(refreshToken string) error
 	VerifyEmail(token string) error
@@ -244,7 +251,7 @@ func (s *authService) Login(email, password string) (*AuthResponse, error) {
 }
 
 // 소셜 로그인
-func (s *authService) SocialLogin(email, provider, socialID string) (*AuthResponse, error) {
+func (s *authService) SocialLogin(email, provider, socialID string, tokens *SocialLoginTokens) (*AuthResponse, error) {
 	slog.Info("Social login attempt",
 		"email", logger.SanitizeEmail(email),
 		"provider", provider,
@@ -298,6 +305,13 @@ func (s *authService) SocialLogin(email, provider, socialID string) (*AuthRespon
 			LinkToken:  linkToken,
 			EmailToken: &emailToken,
 			ExpiresAt:  time.Now().Add(15 * time.Minute), // 15분 유효
+		}
+
+		// OAuth 토큰 정보 저장 (연동 완료 시 SocialAccount로 복사됨)
+		if tokens != nil {
+			pendingLink.AccessToken = tokens.AccessToken
+			pendingLink.RefreshToken = tokens.RefreshToken
+			pendingLink.TokenExpiry = tokens.TokenExpiry
 		}
 
 		if err := s.userRepo.CreatePendingSocialLink(pendingLink); err != nil {
@@ -598,10 +612,13 @@ func (s *authService) ConfirmSocialLinkByPassword(linkToken, password string) (*
 	// 소셜 계정 연동 및 pending link 삭제
 	err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
 		newSocialAccount := &models.SocialAccount{
-			UserID:   user.ID,
-			Provider: pendingLink.Provider,
-			SocialID: pendingLink.SocialID,
-			Email:    pendingLink.Email,
+			UserID:       user.ID,
+			Provider:     pendingLink.Provider,
+			SocialID:     pendingLink.SocialID,
+			Email:        pendingLink.Email,
+			AccessToken:  pendingLink.AccessToken,  // OAuth 토큰 복사
+			RefreshToken: pendingLink.RefreshToken, // OAuth 토큰 복사
+			TokenExpiry:  pendingLink.TokenExpiry,  // OAuth 토큰 복사
 		}
 
 		if err := txRepo.CreateSocialAccount(newSocialAccount); err != nil {
@@ -630,6 +647,7 @@ func (s *authService) ConfirmSocialLinkByPassword(linkToken, password string) (*
 	slog.Info("Social account linked successfully via password",
 		"user_id", user.ID,
 		"provider", pendingLink.Provider,
+		"has_tokens", pendingLink.AccessToken != nil,
 	)
 
 	return s.generateTokens(user)
@@ -661,10 +679,13 @@ func (s *authService) ConfirmSocialLinkByEmailToken(emailToken string) (*AuthRes
 	// 소셜 계정 연동 및 pending link 삭제
 	err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
 		newSocialAccount := &models.SocialAccount{
-			UserID:   user.ID,
-			Provider: pendingLink.Provider,
-			SocialID: pendingLink.SocialID,
-			Email:    pendingLink.Email,
+			UserID:       user.ID,
+			Provider:     pendingLink.Provider,
+			SocialID:     pendingLink.SocialID,
+			Email:        pendingLink.Email,
+			AccessToken:  pendingLink.AccessToken,  // OAuth 토큰 복사
+			RefreshToken: pendingLink.RefreshToken, // OAuth 토큰 복사
+			TokenExpiry:  pendingLink.TokenExpiry,  // OAuth 토큰 복사
 		}
 
 		if err := txRepo.CreateSocialAccount(newSocialAccount); err != nil {
@@ -693,6 +714,7 @@ func (s *authService) ConfirmSocialLinkByEmailToken(emailToken string) (*AuthRes
 	slog.Info("Social account linked successfully via email token",
 		"user_id", user.ID,
 		"provider", pendingLink.Provider,
+		"has_tokens", pendingLink.AccessToken != nil,
 	)
 
 	return s.generateTokens(user)
