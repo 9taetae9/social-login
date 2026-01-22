@@ -1000,6 +1000,9 @@
                     <input type="password" id="loginPassword" placeholder="********">
                 </div>
                 <button onclick="login()">로그인</button>
+                <div style="margin-top: 15px; text-align: center; font-size: 0.9em;">
+                    <a href="javascript:void(0)" onclick="document.getElementById('forgotPasswordModal').style.display='flex'" style="color: #888; text-decoration: none;">비밀번호를 잊으셨나요?</a>
+                </div>
                 <div style="margin-top: 10px; text-align: center; font-size: 0.9em;">
                     계정이 없나요? <a href="#registerCard" style="color: #667eea;">회원가입 하기</a>
                 </div>
@@ -1109,6 +1112,19 @@
                     </div>
                 </div>
 
+                <div id="changePasswordSection" class="password-change-section" style="background: #f8f9fa; border-radius: 12px; padding: 20px; margin: 15px 0; display: none;">
+                    <h4 style="color: #333; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 10px;">🔒 비밀번호 변경</h4>
+                    <div class="form-group">
+                        <label>현재 비밀번호</label>
+                        <input type="password" id="currentPassword" placeholder="현재 비밀번호">
+                    </div>
+                    <div class="form-group">
+                        <label>새 비밀번호 (8자 이상)</label>
+                        <input type="password" id="newPassword" placeholder="새 비밀번호">
+                    </div>
+                    <button class="btn-warning" onclick="changePassword()">비밀번호 변경</button>
+                </div>
+
                 <div class="linked-accounts">
                     <h4>🔗 연동된 소셜 계정</h4>
                     <div id="linkedAccountsList">
@@ -1147,6 +1163,21 @@
         <div class="response">
             <h2>응답 결과</h2>
             <div id="responseArea">여기에 API 응답 결과가 표시됩니다...</div>
+        </div>
+    </div>
+
+    <div id="forgotPasswordModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('forgotPasswordModal')">&times;</span>
+            <div class="modal-header info" style="color: #1976d2;">비밀번호 재설정 요청</div>
+            <div class="modal-body">
+                <p>가입한 이메일 주소를 입력하시면 비밀번호 재설정 링크를 보내드립니다.</p>
+                <div class="form-group" style="margin-top: 15px; text-align: left;">
+                    <label>이메일 주소</label>
+                    <input type="email" id="forgotEmail" placeholder="example@email.com">
+                </div>
+            </div>
+            <button class="modal-confirm-btn" onclick="requestPasswordReset()">재설정 메일 발송</button>
         </div>
     </div>
 
@@ -2016,6 +2047,16 @@
                 document.getElementById('userType').textContent = userTypeText;
             }
 
+            if (data.has_password) {
+                document.getElementById('changePasswordSection').style.display = 'block';
+                // (기존) 회원 탈퇴 섹션 표시
+                document.getElementById('deleteAccountSection').style.display = 'block'; 
+            } else {
+                document.getElementById('changePasswordSection').style.display = 'none';
+                // 소셜 전용 계정은 비밀번호 변경 불가 (회원 탈퇴도 연동 해제로 유도하므로 숨김)
+                document.getElementById('deleteAccountSection').style.display = 'none';
+            }
+
             // 연동된 소셜 계정 목록 업데이트
             const listContainer = document.getElementById('linkedAccountsList');
 
@@ -2348,6 +2389,57 @@
                 displayResponse(200, data);
                 showErrorModal(0, '알 수 없는 응답 형식입니다.');
             }
+        }
+
+        // 1. 비밀번호 변경 (로그인 상태)
+        async function changePassword() {
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+
+            if (!currentPassword || !newPassword) {
+                showErrorModal(0, "모든 필드를 입력해주세요.");
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/v1/protected/password`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+                });
+                const data = await res.json();
+                displayResponse(res.status, data);
+                
+                if (res.ok) {
+                    showToast('비밀번호가 변경되었습니다.', 'success');
+                    document.getElementById('currentPassword').value = '';
+                    document.getElementById('newPassword').value = '';
+                }
+            } catch (e) { displayResponse(0, { error: e.message }); }
+        }
+
+        // 2. 비밀번호 재설정 요청 (메일 발송)
+        async function requestPasswordReset() {
+            const email = document.getElementById('forgotEmail').value;
+            if (!email) { showErrorModal(0, "이메일을 입력하세요."); return; }
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/v1/auth/forgot-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                const data = await res.json();
+                displayResponse(res.status, data);
+                
+                // 보안상 항상 성공 메시지 표시
+                closeModal('forgotPasswordModal');
+                document.getElementById('successMessage').textContent = "비밀번호 재설정 링크가 이메일로 발송되었습니다.";
+                document.getElementById('successModal').style.display = 'flex';
+            } catch (e) { displayResponse(0, { error: e.message }); }
         }
 
         // 페이지 로드 시 초기화
