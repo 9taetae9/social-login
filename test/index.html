@@ -1126,6 +1126,12 @@
                     <button class="btn-outline" onclick="loadLinkedAccounts()">연동 정보 새로고침</button>
                     <button class="btn-danger" onclick="logout()">로그아웃</button>
                 </div>
+
+                <!-- 회원 탈퇴 섹션 (비밀번호가 있는 일반 계정만 표시) -->
+                <div id="deleteAccountSection" class="delete-account-section" style="display: none;">
+                    <p style="color: #888; font-size: 0.9em;">더 이상 서비스를 이용하지 않으시나요?</p>
+                    <button class="btn-danger" style="width: auto; padding: 8px 20px;" onclick="showDeleteAccountModal()">회원 탈퇴</button>
+                </div>
             </div>
         </div>
 
@@ -1356,9 +1362,16 @@
                 <p style="color: #dc3545; font-weight: bold; margin-bottom: 15px;">
                     정말 탈퇴하시겠습니까?
                 </p>
-                <p style="color: #666;">
-                    계정이 삭제되면 모든 데이터가 영구적으로 삭제되며<br>
-                    복구할 수 없습니다.
+                <div style="background: #fff3e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; border-left: 4px solid #ff9800;">
+                    <p style="color: #e65100; margin: 0 0 8px 0; font-weight: 600;">탈퇴 시 다음 항목이 모두 삭제됩니다:</p>
+                    <ul style="color: #666; margin: 0; padding-left: 20px; font-size: 0.9em;">
+                        <li>계정 정보 및 프로필</li>
+                        <li>연동된 모든 소셜 계정 (Google, Naver, Kakao)</li>
+                        <li>저장된 모든 데이터</li>
+                    </ul>
+                </div>
+                <p style="color: #666; font-size: 0.9em;">
+                    삭제된 데이터는 복구할 수 없습니다.
                 </p>
             </div>
             <div class="btn-group">
@@ -1372,6 +1385,7 @@
         const API_BASE_URL = 'http://localhost:8080';
         let accessToken = '';
         let refreshTokenValue = '';
+        let loginMethod = ''; // 'email' 또는 'social' - 로그인 방식 추적
         let pendingLinkData = null;
 
         // 모달 제어 함수
@@ -1568,9 +1582,9 @@
                     closeModal('linkModal');
                     pendingLinkData = null;
 
-                    // 토큰 저장 (await 추가)
+                    // 토큰 저장 (소셜 연동을 통한 로그인)
                     if (data.data && data.data.access_token) {
-                        await saveTokens(data.data.access_token, data.data.refresh_token);
+                        await saveTokens(data.data.access_token, data.data.refresh_token, 'social');
                     }
 
                     displayResponse(response.status, data);
@@ -1595,13 +1609,16 @@
         }
 
         // 토큰 저장 및 UI 업데이트 공통 함수
-        async function saveTokens(access, refresh) {
+        // method: 'email' (일반 로그인) 또는 'social' (소셜 로그인)
+        async function saveTokens(access, refresh, method = 'email') {
             accessToken = access;
             refreshTokenValue = refresh;
+            loginMethod = method;
 
-            // localStorage에 토큰 저장 (새로고침 시에도 유지)
+            // localStorage에 토큰 및 로그인 방식 저장 (새로고침 시에도 유지)
             localStorage.setItem('accessToken', access);
             localStorage.setItem('refreshToken', refresh);
+            localStorage.setItem('loginMethod', method);
 
             document.getElementById('savedAccessToken').textContent = accessToken.substring(0, 50) + '...';
             document.getElementById('savedRefreshToken').textContent = refreshTokenValue.substring(0, 50) + '...';
@@ -1620,10 +1637,12 @@
         function restoreTokensFromStorage() {
             const storedAccess = localStorage.getItem('accessToken');
             const storedRefresh = localStorage.getItem('refreshToken');
+            const storedMethod = localStorage.getItem('loginMethod');
 
             if (storedAccess && storedRefresh) {
                 accessToken = storedAccess;
                 refreshTokenValue = storedRefresh;
+                loginMethod = storedMethod || 'email'; // 기본값은 email
 
                 document.getElementById('savedAccessToken').textContent = accessToken.substring(0, 50) + '...';
                 document.getElementById('savedRefreshToken').textContent = refreshTokenValue.substring(0, 50) + '...';
@@ -1641,10 +1660,11 @@
             return false;
         }
 
-        // localStorage에서 토큰 삭제
+        // localStorage에서 토큰 및 로그인 방식 삭제
         function clearTokensFromStorage() {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
+            localStorage.removeItem('loginMethod');
         }
 
         // 소셜 로그인 결과 JSON 파싱 함수
@@ -1669,7 +1689,7 @@
                 if (data.data && data.data.access_token) {
                     displayResponse(200, data);
 
-                    await saveTokens(data.data.access_token, data.data.refresh_token);
+                    await saveTokens(data.data.access_token, data.data.refresh_token, 'social');
 
                     showToast('소셜 로그인 토큰이 적용되었습니다!', 'success');
                 } else {
@@ -1802,8 +1822,8 @@
                 displayResponse(response.status, data);
 
                 if (response.ok && data.data) {
-                    // 토큰 저장 (await 추가)
-                    await saveTokens(data.data.access_token, data.data.refresh_token);
+                    // 토큰 저장 (일반 로그인)
+                    await saveTokens(data.data.access_token, data.data.refresh_token, 'email');
 
                     // 성공 모달 표시
                     document.getElementById('socialLoginProvider').innerHTML =
@@ -1918,7 +1938,8 @@
                     // 세션 초기화
                     accessToken = '';
                     refreshTokenValue = '';
-                    // localStorage에서 토큰 삭제
+                    loginMethod = '';
+                    // localStorage에서 토큰 및 로그인 방식 삭제
                     clearTokensFromStorage();
                     document.getElementById('tokenDisplay').style.display = 'none';
                     document.getElementById('protectedToken').value = '';
@@ -2043,6 +2064,14 @@
                 listContainer.innerHTML = html;
             }
 
+            // 회원 탈퇴 섹션 표시/숨김 (일반 로그인으로 접속한 경우에만 표시)
+            const deleteSection = document.getElementById('deleteAccountSection');
+            if (loginMethod === 'email') {
+                deleteSection.style.display = 'block';
+            } else {
+                deleteSection.style.display = 'none';
+            }
+
             // 계정 관리 섹션으로 스크롤
             const section = document.getElementById('accountManagementSection');
             section.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2065,6 +2094,8 @@
                     <p style="font-size: 0.85em;">소셜 로그인을 하면 자동으로 연동됩니다.</p>
                 </div>
             `;
+            // 회원 탈퇴 섹션 숨기기
+            document.getElementById('deleteAccountSection').style.display = 'none';
         }
 
         // 로그인 성공 후 계정 관리 페이지로 이동
@@ -2196,9 +2227,14 @@
             }
         }
 
-        // 회원 탈퇴 확인 모달 표시
+        // 회원 탈퇴 확인 모달 표시 (연동 해제 모달에서 호출)
         function showDeleteConfirmModal() {
             closeModal('unlinkModal');
+            document.getElementById('deleteAccountModal').style.display = 'block';
+        }
+
+        // 회원 탈퇴 모달 표시 (계정 관리 섹션에서 직접 호출)
+        function showDeleteAccountModal() {
             document.getElementById('deleteAccountModal').style.display = 'block';
         }
 
@@ -2219,7 +2255,8 @@
                     // 로그아웃 처리
                     accessToken = '';
                     refreshTokenValue = '';
-                    // localStorage에서 토큰 삭제
+                    loginMethod = '';
+                    // localStorage에서 토큰 및 로그인 방식 삭제
                     clearTokensFromStorage();
                     document.getElementById('tokenDisplay').style.display = 'none';
                     document.getElementById('protectedToken').value = '';
@@ -2297,8 +2334,8 @@
                 // 응답 영역에 표시 (개발자 도구 대용)
                 displayResponse(200, data);
 
-                // 토큰 저장 (await 추가 - saveTokens에서 자동으로 연동 계정 로드)
-                await saveTokens(data.data.access_token, data.data.refresh_token);
+                // 토큰 저장 (소셜 로그인)
+                await saveTokens(data.data.access_token, data.data.refresh_token, 'social');
 
                 // 성공 팝업 표시
                 const providerName = providerNames[provider] || provider;

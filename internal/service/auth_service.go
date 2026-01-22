@@ -72,6 +72,7 @@ type SocialAccountInfo struct {
 type LinkedAccountsResponse struct {
 	User           *models.User        `json:"user"`
 	SocialAccounts []SocialAccountInfo `json:"social_accounts"`
+	HasPassword    bool                `json:"has_password"` // 비밀번호 설정 여부 (회원 탈퇴 가능 여부 판단용)
 }
 
 func NewAuthService(userRepo repository.UserRepository, cfg *config.Config) AuthService {
@@ -821,6 +822,7 @@ func (s *authService) GetLinkedSocialAccounts(userID uint) (*LinkedAccountsRespo
 	return &LinkedAccountsResponse{
 		User:           user,
 		SocialAccounts: accountInfos,
+		HasPassword:    user.PasswordHash != nil,
 	}, nil
 }
 
