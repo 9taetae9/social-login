@@ -51,6 +51,12 @@ type UserRepository interface {
 	FindPendingSocialLinkByEmailToken(emailToken string) (*models.PendingSocialLink, error)
 	DeletePendingSocialLink(id uint) error
 	DeletePendingSocialLinksByUserID(userID uint) error
+
+	// 비밀번호 재설정 토큰 관련
+	CreatePasswordResetToken(token *models.PasswordResetToken) error
+	FindPasswordResetTokenByToken(token string) (*models.PasswordResetToken, error)
+	MarkPasswordResetTokenAsUsed(id uint) error
+	DeleteExpiredPasswordResetTokens() error
 }
 
 type userRepository struct {
@@ -390,6 +396,53 @@ func (r *userRepository) UpdatePassword(userID uint, passwordHash string) error 
 		return errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to update password", 500)
 	}
 	slog.Debug("Password updated successfully", "user_id", userID)
+	return nil
+}
+
+// 비밀번호 재설정 토큰 생성
+func (r *userRepository) CreatePasswordResetToken(token *models.PasswordResetToken) error {
+	err := r.db.Create(token).Error
+	if err != nil {
+		slog.Error("Failed to create password reset token", "error", err)
+		return errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to create password reset token", 500)
+	}
+	slog.Debug("Password reset token created", "token_id", token.ID, "user_id", token.UserID)
+	return nil
+}
+
+// 토큰으로 비밀번호 재설정 토큰 조회
+func (r *userRepository) FindPasswordResetTokenByToken(token string) (*models.PasswordResetToken, error) {
+	var resetToken models.PasswordResetToken
+	err := r.db.Where("token = ?", token).First(&resetToken).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrCodePasswordResetTokenInvalid, "Invalid password reset token", 400)
+		}
+		slog.Error("Database error finding password reset token", "error", err)
+		return nil, errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to find password reset token", 500)
+	}
+	return &resetToken, nil
+}
+
+// 비밀번호 재설정 토큰을 사용됨으로 표시
+func (r *userRepository) MarkPasswordResetTokenAsUsed(id uint) error {
+	err := r.db.Model(&models.PasswordResetToken{}).Where("id = ?", id).Update("used", true).Error
+	if err != nil {
+		slog.Error("Failed to mark password reset token as used", "error", err, "token_id", id)
+		return errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to mark password reset token as used", 500)
+	}
+	slog.Debug("Password reset token marked as used", "token_id", id)
+	return nil
+}
+
+// 만료된 비밀번호 재설정 토큰 삭제
+func (r *userRepository) DeleteExpiredPasswordResetTokens() error {
+	err := r.db.Where("expires_at < ? OR used = ?", time.Now(), true).Delete(&models.PasswordResetToken{}).Error
+	if err != nil {
+		slog.Error("Failed to delete expired password reset tokens", "error", err)
+		return errors.Wrap(err, errors.ErrCodeDBQuery, "Failed to delete expired password reset tokens", 500)
+	}
+	slog.Debug("Expired password reset tokens deleted")
 	return nil
 }
 
