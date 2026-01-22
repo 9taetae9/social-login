@@ -51,6 +51,16 @@ const (
 	// Account Errors (ACCOUNT_XXX)
 	ErrCodeAccountDeleteFailed = "ACCOUNT_DELETE_FAILED"
 
+	// Password Reset Errors (PASSWORD_XXX)
+	ErrCodePasswordResetTokenInvalid  = "PASSWORD_RESET_TOKEN_INVALID"
+	ErrCodePasswordResetTokenExpired  = "PASSWORD_RESET_TOKEN_EXPIRED"
+	ErrCodePasswordResetTokenUsed     = "PASSWORD_RESET_TOKEN_USED"
+	ErrCodePasswordResetFailed        = "PASSWORD_RESET_FAILED"
+	ErrCodePasswordChangeFailed       = "PASSWORD_CHANGE_FAILED"
+	ErrCodePasswordCurrentInvalid     = "PASSWORD_CURRENT_INVALID"
+	ErrCodePasswordSameAsOld          = "PASSWORD_SAME_AS_OLD"
+	ErrCodePasswordNotSet             = "PASSWORD_NOT_SET"
+
 	// Internal Errors (INTERNAL_XXX)
 	ErrCodeInternal = "INTERNAL_ERROR"
 )
