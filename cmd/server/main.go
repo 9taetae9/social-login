@@ -72,6 +72,11 @@ func main() {
 			auth.GET("/confirm-social-link/:token", authHandler.ConfirmSocialLinkByEmailToken)
 			auth.POST("/send-social-link-email", authHandler.SendSocialLinkEmail)
 
+			// 비밀번호 재설정 (인증 불필요)
+			auth.POST("/forgot-password", authHandler.ForgotPassword)
+			auth.GET("/reset-password/:token", authHandler.ValidateResetToken)
+			auth.POST("/reset-password", authHandler.ResetPassword)
+
 			// 인증 필요 엔드포인트
 			auth.POST("/logout", authHandler.Logout)
 
@@ -101,6 +106,7 @@ func main() {
 			protected.DELETE("/social-accounts/:provider", authHandler.UnlinkSocialAccount)
 			protected.POST("/convert-to-email", authHandler.ConvertToEmailAccount)
 			protected.DELETE("/account", authHandler.DeleteAccount)
+			protected.PUT("/password", authHandler.ChangePassword)
 		}
 	}
 
