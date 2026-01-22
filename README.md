@@ -36,6 +36,7 @@ Go 언어 기반의 이메일 및 소셜 로그인(Google, Naver, Kakao) 인증 
 - 24시간 유효한 UUID 토큰
 - SMTP를 통한 이메일 발송 (Mailtrap 샌드박스)
 - 인증 메일 재발송 기능
+- **반응형 이메일 템플릿**: 그라데이션 버튼, 깔끔한 레이아웃의 HTML 이메일
 
 ### 2. JWT 기반 인증
 - **Access Token**: 15분 유효 (API 요청 인증)
@@ -55,8 +56,9 @@ Go 언어 기반의 이메일 및 소셜 로그인(Google, Naver, Kakao) 인증 
 
 ### 4. 소셜 계정 연동 검증
 - 기존 이메일 가입자가 소셜 로그인 시도 시 **검증 필요**
-- **비밀번호 검증**: 기존 계정의 비밀번호로 본인 확인
+- **비밀번호 검증**: 기존 계정의 비밀번호로 본인 확인 (즉시 연동)
 - **이메일 토큰 검증**: 인증 이메일 링크 클릭으로 본인 확인
+  - **온디맨드 이메일 발송**: 사용자가 이메일 인증을 선택한 경우에만 발송 (비용 최적화)
 - `pending_social_links` 테이블로 대기 상태 관리
 - 15분 유효 토큰으로 보안 강화
 
@@ -73,6 +75,7 @@ Go 언어 기반의 이메일 및 소셜 로그인(Google, Naver, Kakao) 인증 
 - **연동된 소셜 계정 조회**: 현재 계정에 연동된 모든 소셜 계정 목록 확인
 - **소셜 계정 연동 해제**: 연동된 소셜 계정을 개별적으로 해제
   - 마지막 인증 수단 보호: 비밀번호 없이 유일한 소셜 계정 해제 시 경고
+  - **OAuth 토큰 Revoke**: 연동 해제 시 외부 OAuth 제공자에 토큰 무효화 요청 (Google, Naver, Kakao)
 - **일반 회원 전환**: 소셜 전용 계정에 비밀번호를 설정하여 이메일 로그인 가능하게 전환
 - **회원 탈퇴**: 계정 및 관련 데이터 완전 삭제 (CASCADE)
 
@@ -173,17 +176,21 @@ SocialLogin 서비스 호출
    ↓
 PendingSocialLink 생성 (link_token + email_token)
    ↓
-소셜 연동 확인 이메일 발송
-   ↓
 클라이언트에 검증 필요 응답 (409 Conflict)
    ├─ link_token, email, provider, has_password 반환
    ↓
 사용자 검증 방법 선택
    ├─ [방법 1] 비밀번호 입력 (POST /confirm-social-link)
    │     └─ 비밀번호 검증 → 소셜 계정 연동 → JWT 발급
-   └─ [방법 2] 이메일 링크 클릭 (GET /confirm-social-link/:token)
-         └─ 토큰 검증 → 소셜 계정 연동 → JWT 발급
+   └─ [방법 2] 이메일 인증 선택
+         ├─ 이메일 발송 요청 (POST /send-social-link-email)
+         ├─ 인증 이메일 발송
+         └─ 이메일 링크 클릭 (GET /confirm-social-link/:token)
+               └─ 토큰 검증 → 소셜 계정 연동 → JWT 발급
 ```
+
+> **비용 최적화**: 이메일은 사용자가 이메일 인증을 선택한 경우에만 발송됩니다.
+> 비밀번호로 바로 인증하는 사용자에게는 불필요한 이메일이 발송되지 않습니다.
 
 ## 🗃 데이터베이스 스키마
 
@@ -255,7 +262,11 @@ PendingSocialLink 생성 (link_token + email_token)
 | provider | VARCHAR(20) | NOT NULL | google/naver/kakao |
 | social_id | VARCHAR(255) | NOT NULL | 소셜 플랫폼 고유 ID |
 | email | VARCHAR(255) | NULL | 소셜 계정 이메일 |
+| access_token | VARCHAR(2048) | NULL | OAuth Access Token (연동 해제 시 revoke용) |
+| refresh_token | VARCHAR(2048) | NULL | OAuth Refresh Token |
+| token_expiry | BIGINT | NULL | 토큰 만료 시간 (Unix timestamp) |
 | created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 생성 시각 |
+| updated_at | TIMESTAMP | ON UPDATE CURRENT_TIMESTAMP | 수정 시각 |
 
 **제약 조건:**
 - UNIQUE INDEX: (provider, social_id) - 동일 제공자 내 중복 방지
@@ -287,6 +298,13 @@ http://localhost:8080/api/v1
 | POST | `/auth/login` | 이메일 로그인 | ❌ |
 | GET | `/auth/verify/:token` | 이메일 인증 | ❌ |
 | POST | `/auth/resend-verify` | 인증 메일 재발송 | ❌ |
+
+#### 소셜 계정 연동
+| Method | Endpoint | 설명 | 인증 필요 |
+|--------|----------|------|----------|
+| POST | `/auth/confirm-social-link` | 비밀번호로 소셜 연동 확인 | ❌ |
+| GET | `/auth/confirm-social-link/:token` | 이메일 토큰으로 소셜 연동 확인 | ❌ |
+| POST | `/auth/send-social-link-email` | 소셜 연동 인증 이메일 발송 요청 | ❌ |
 
 #### 토큰 관리
 | Method | Endpoint | 설명 | 인증 필요 |
@@ -507,6 +525,23 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 ```json
 {
   "message": "Account deleted successfully"
+}
+```
+
+#### 소셜 연동 인증 이메일 발송 요청
+```bash
+POST /api/v1/auth/send-social-link-email
+Content-Type: application/json
+
+{
+  "link_token": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**응답 (200 OK)**
+```json
+{
+  "message": "Verification email sent successfully"
 }
 ```
 
@@ -802,6 +837,7 @@ Postman 컬렉션을 사용하여 모든 API를 테스트할 수 있습니다.
 - [ ] **이메일 변경** 기능
 - [x] **소셜 계정 연동 해제** ✅
 - [x] **일반 회원 전환**: 소셜 전용 계정에 비밀번호 설정 ✅
+- [x] **OAuth 토큰 Revoke**: 연동 해제 시 외부 제공자에 토큰 무효화 요청 ✅
 - [ ] **Apple 소셜 로그인** 추가
 
 ### 보안 강화
@@ -810,3 +846,6 @@ Postman 컬렉션을 사용하여 모든 API를 테스트할 수 있습니다.
 - [ ] **블랙리스트**: 탈취된 토큰 무효화
 - [ ] **IP 기반 접근 제어**
 - [ ] **로그인 이력 추적**
+
+### 최적화
+- [x] **이메일 발송 최적화**: 소셜 연동 시 사용자 요청 시에만 이메일 발송 ✅
