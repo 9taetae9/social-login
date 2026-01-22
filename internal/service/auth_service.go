@@ -42,6 +42,11 @@ type AuthService interface {
 	DeleteAccount(userID uint) error
 	// OAuth 토큰 관련
 	SaveSocialAccountTokens(userID uint, provider string, accessToken, refreshToken *string, tokenExpiry *int64) error
+	// 비밀번호 관련
+	ChangePassword(userID uint, currentPassword, newPassword string) error
+	RequestPasswordReset(email string) error
+	ValidatePasswordResetToken(token string) error
+	ResetPassword(token, newPassword string) error
 }
 
 type UnlinkResponse struct {
@@ -1052,6 +1057,198 @@ func (s *authService) SaveSocialAccountTokens(userID uint, provider string, acce
 	slog.Info("Social account tokens saved successfully",
 		"user_id", userID,
 		"provider", provider,
+	)
+	return nil
+}
+
+// ChangePassword 비밀번호 변경 (로그인된 사용자)
+func (s *authService) ChangePassword(userID uint, currentPassword, newPassword string) error {
+	slog.Info("Password change attempt", "user_id", userID)
+
+	// 사용자 조회
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+
+	// 소셜 전용 계정 (비밀번호 없음) 확인
+	if user.PasswordHash == nil {
+		slog.Warn("Password change failed: no password set", "user_id", userID)
+		return errors.New(errors.ErrCodePasswordNotSet,
+			"This account does not have a password set. Please use social login or set a password first.", 400)
+	}
+
+	// 현재 비밀번호 확인
+	if err := utils.CheckPassword(*user.PasswordHash, currentPassword); err != nil {
+		slog.Warn("Password change failed: invalid current password", "user_id", userID)
+		return errors.New(errors.ErrCodePasswordCurrentInvalid, "Current password is incorrect", 401)
+	}
+
+	// 새 비밀번호가 현재 비밀번호와 같은지 확인
+	if err := utils.CheckPassword(*user.PasswordHash, newPassword); err == nil {
+		slog.Warn("Password change failed: new password same as old", "user_id", userID)
+		return errors.New(errors.ErrCodePasswordSameAsOld, "New password must be different from current password", 400)
+	}
+
+	// 새 비밀번호 해시
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		slog.Error("Failed to hash new password", "error", err)
+		return errors.NewInternalError(errors.ErrCodeHashPassword, "Failed to hash password", err)
+	}
+
+	// 비밀번호 업데이트
+	if err := s.userRepo.UpdatePassword(userID, hashedPassword); err != nil {
+		return err
+	}
+
+	slog.Info("Password changed successfully",
+		"user_id", userID,
+		"email", logger.SanitizeEmail(user.Email),
+	)
+	return nil
+}
+
+// RequestPasswordReset 비밀번호 재설정 요청 (이메일 발송)
+func (s *authService) RequestPasswordReset(email string) error {
+	slog.Info("Password reset request", "email", logger.SanitizeEmail(email))
+
+	// 사용자 조회
+	user, err := s.userRepo.FindByEmail(email)
+	if err != nil {
+		// 보안상 사용자가 없어도 성공 응답 (이메일 존재 여부 노출 방지)
+		if appErr, ok := err.(*errors.AppError); ok && appErr.Code == errors.ErrCodeUserNotFound {
+			slog.Info("Password reset requested for non-existent email", "email", logger.SanitizeEmail(email))
+			return nil // 성공으로 처리
+		}
+		return err
+	}
+
+	// 소셜 전용 계정 확인 (비밀번호 없는 계정)
+	if user.PasswordHash == nil {
+		slog.Info("Password reset requested for social-only account", "user_id", user.ID)
+		// 보안상 성공으로 처리하되, 이메일은 발송하지 않음
+		return nil
+	}
+
+	// 비밀번호 재설정 토큰 생성
+	resetToken := uuid.New().String()
+	passwordResetToken := &models.PasswordResetToken{
+		UserID:    user.ID,
+		Token:     resetToken,
+		ExpiresAt: time.Now().Add(1 * time.Hour), // 1시간 유효
+		Used:      false,
+	}
+
+	if err := s.userRepo.CreatePasswordResetToken(passwordResetToken); err != nil {
+		return err
+	}
+
+	// 비밀번호 재설정 이메일 발송
+	emailCfg := utils.EmailConfig{
+		SMTPHost:     s.cfg.Email.SMTPHost,
+		SMTPPort:     s.cfg.Email.SMTPPort,
+		SMTPUsername: s.cfg.Email.SMTPUsername,
+		SMTPPassword: s.cfg.Email.SMTPPassword,
+		FromEmail:    s.cfg.Email.FromEmail,
+	}
+
+	if err := utils.SendPasswordResetEmail(email, resetToken, s.cfg.App.FrontendURL, emailCfg); err != nil {
+		slog.Error("Failed to send password reset email",
+			"error", err,
+			"email", logger.SanitizeEmail(email),
+		)
+		return errors.NewInternalError(errors.ErrCodeEmailSendFailed, "Failed to send password reset email", err)
+	}
+
+	slog.Info("Password reset email sent", "email", logger.SanitizeEmail(email))
+	return nil
+}
+
+// ValidatePasswordResetToken 비밀번호 재설정 토큰 검증
+func (s *authService) ValidatePasswordResetToken(token string) error {
+	slog.Info("Validating password reset token")
+
+	// 토큰 조회
+	resetToken, err := s.userRepo.FindPasswordResetTokenByToken(token)
+	if err != nil {
+		return err
+	}
+
+	// 만료 확인
+	if time.Now().After(resetToken.ExpiresAt) {
+		slog.Warn("Password reset token expired")
+		return errors.New(errors.ErrCodePasswordResetTokenExpired, "Password reset token has expired", 400)
+	}
+
+	// 사용 여부 확인
+	if resetToken.Used {
+		slog.Warn("Password reset token already used")
+		return errors.New(errors.ErrCodePasswordResetTokenUsed, "Password reset token has already been used", 400)
+	}
+
+	slog.Info("Password reset token is valid", "user_id", resetToken.UserID)
+	return nil
+}
+
+// ResetPassword 비밀번호 재설정 (토큰으로)
+func (s *authService) ResetPassword(token, newPassword string) error {
+	slog.Info("Password reset attempt")
+
+	// 토큰 조회
+	resetToken, err := s.userRepo.FindPasswordResetTokenByToken(token)
+	if err != nil {
+		return err
+	}
+
+	// 만료 확인
+	if time.Now().After(resetToken.ExpiresAt) {
+		slog.Warn("Password reset token expired")
+		return errors.New(errors.ErrCodePasswordResetTokenExpired, "Password reset token has expired", 400)
+	}
+
+	// 사용 여부 확인
+	if resetToken.Used {
+		slog.Warn("Password reset token already used")
+		return errors.New(errors.ErrCodePasswordResetTokenUsed, "Password reset token has already been used", 400)
+	}
+
+	// 사용자 조회
+	user, err := s.userRepo.FindByID(resetToken.UserID)
+	if err != nil {
+		return err
+	}
+
+	// 새 비밀번호 해시
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		slog.Error("Failed to hash new password", "error", err)
+		return errors.NewInternalError(errors.ErrCodeHashPassword, "Failed to hash password", err)
+	}
+
+	// 트랜잭션: 비밀번호 업데이트 + 토큰 사용 처리
+	err = s.userRepo.WithTrx(func(txRepo repository.UserRepository) error {
+		// 비밀번호 업데이트
+		if err := txRepo.UpdatePassword(user.ID, hashedPassword); err != nil {
+			return err
+		}
+
+		// 토큰 사용됨으로 표시
+		if err := txRepo.MarkPasswordResetTokenAsUsed(resetToken.ID); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		slog.Error("Failed to reset password", "error", err)
+		return errors.NewInternalError(errors.ErrCodePasswordResetFailed, "Failed to reset password", err)
+	}
+
+	slog.Info("Password reset successfully",
+		"user_id", user.ID,
+		"email", logger.SanitizeEmail(user.Email),
 	)
 	return nil
 }
