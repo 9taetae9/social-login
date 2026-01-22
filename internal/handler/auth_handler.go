@@ -866,19 +866,193 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
-		errors.HandleError(c, errors.NewValidationError("Verification token is required"))
+		h.sendEmailVerificationResponse(c, false, "Verification token is required")
 		return
 	}
 
 	// 이메일 인증 처리
 	if err := h.authService.VerifyEmail(token); err != nil {
-		errors.HandleError(c, err)
+		// 에러 메시지 추출
+		errMsg := "Email verification failed"
+		if appErr, ok := err.(*errors.AppError); ok {
+			errMsg = appErr.Message
+		}
+		h.sendEmailVerificationResponse(c, false, errMsg)
 		return
 	}
 
-	c.JSON(http.StatusOK, SuccessResponse{
-		Message: "Email verified successfully",
-	})
+	h.sendEmailVerificationResponse(c, true, "")
+}
+
+// sendEmailVerificationResponse 이메일 인증 결과를 HTML 페이지로 반환
+func (h *AuthHandler) sendEmailVerificationResponse(c *gin.Context, success bool, errMsg string) {
+	var html string
+
+	if success {
+		html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Email Verified</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 50px 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 450px;
+        }
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #43a047 0%, #66bb6a 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 25px;
+            color: white;
+            font-size: 40px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+        }
+        p {
+            color: #666;
+            margin-bottom: 25px;
+            line-height: 1.6;
+            font-size: 1.1em;
+        }
+        .info-box {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            border-left: 4px solid #43a047;
+            padding: 15px 20px;
+            text-align: left;
+            border-radius: 8px;
+            margin: 25px 0;
+        }
+        .info-box p {
+            margin: 5px 0;
+            font-size: 0.95em;
+            color: #2e7d32;
+        }
+        .close-hint {
+            font-size: 0.9em;
+            color: #999;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">✓</div>
+        <h1>Email Verified!</h1>
+        <p>Your email address has been successfully verified.</p>
+        <div class="info-box">
+            <p><strong>What's next?</strong></p>
+            <p>You can now log in to your account and enjoy all features.</p>
+        </div>
+        <p class="close-hint">You can close this page now.</p>
+    </div>
+</body>
+</html>`
+	} else {
+		html = fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Verification Failed</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 50px 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 450px;
+        }
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #e53935 0%%, #ef5350 100%%);
+            border-radius: 50%%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 25px;
+            color: white;
+            font-size: 40px;
+        }
+        h1 {
+            color: #e53935;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+        }
+        p {
+            color: #666;
+            margin-bottom: 25px;
+            line-height: 1.6;
+            font-size: 1.1em;
+        }
+        .error-box {
+            background: linear-gradient(135deg, #ffebee 0%%, #ffcdd2 100%%);
+            border-left: 4px solid #e53935;
+            padding: 15px 20px;
+            text-align: left;
+            border-radius: 8px;
+            margin: 25px 0;
+        }
+        .error-box p {
+            margin: 5px 0;
+            font-size: 0.95em;
+            color: #c62828;
+        }
+        .close-hint {
+            font-size: 0.9em;
+            color: #999;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-icon">✕</div>
+        <h1>Verification Failed</h1>
+        <p>We couldn't verify your email address.</p>
+        <div class="error-box">
+            <p><strong>Reason:</strong></p>
+            <p>%s</p>
+        </div>
+        <p>The link may have expired or already been used.<br>Please request a new verification email.</p>
+        <p class="close-hint">You can close this page now.</p>
+    </div>
+</body>
+</html>`, errMsg)
+	}
+
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, html)
 }
 
 func (h *AuthHandler) ResendVerificationEmail(c *gin.Context) {
@@ -936,21 +1110,218 @@ func (h *AuthHandler) ConfirmSocialLinkByPassword(c *gin.Context) {
 func (h *AuthHandler) ConfirmSocialLinkByEmailToken(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
-		errors.HandleError(c, errors.NewValidationError("Email token is required"))
+		h.sendSocialLinkVerificationResponse(c, false, "", "Email token is required")
 		return
 	}
 
 	// 소셜 연동 확인 처리
 	response, err := h.authService.ConfirmSocialLinkByEmailToken(token)
 	if err != nil {
-		errors.HandleError(c, err)
+		errMsg := "Social account linking failed"
+		if appErr, ok := err.(*errors.AppError); ok {
+			errMsg = appErr.Message
+		}
+		h.sendSocialLinkVerificationResponse(c, false, "", errMsg)
 		return
 	}
 
-	c.JSON(http.StatusOK, SuccessResponse{
-		Message: "Social account linked successfully",
-		Data:    response,
-	})
+	// 연동된 provider 정보 추출
+	provider := ""
+	if response != nil && response.User.SocialAccounts != nil {
+		for _, acc := range response.User.SocialAccounts {
+			provider = acc.Provider
+			break
+		}
+	}
+
+	h.sendSocialLinkVerificationResponse(c, true, provider, "")
+}
+
+// sendSocialLinkVerificationResponse 소셜 연동 결과를 HTML 페이지로 반환
+func (h *AuthHandler) sendSocialLinkVerificationResponse(c *gin.Context, success bool, provider string, errMsg string) {
+	var html string
+
+	if success {
+		providerDisplay := provider
+		if provider != "" {
+			// provider 이름 대문자로 시작하도록 변환
+			providerDisplay = string(provider[0]-32) + provider[1:]
+		}
+
+		html = fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>계정 연동 완료</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 50px 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 450px;
+        }
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #43a047 0%%, #66bb6a 100%%);
+            border-radius: 50%%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 25px;
+            color: white;
+            font-size: 40px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+        }
+        p {
+            color: #666;
+            margin-bottom: 25px;
+            line-height: 1.6;
+            font-size: 1.1em;
+        }
+        .provider-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 10px 0 20px;
+        }
+        .info-box {
+            background: linear-gradient(135deg, #e8f5e9 0%%, #c8e6c9 100%%);
+            border-left: 4px solid #43a047;
+            padding: 15px 20px;
+            text-align: left;
+            border-radius: 8px;
+            margin: 25px 0;
+        }
+        .info-box p {
+            margin: 5px 0;
+            font-size: 0.95em;
+            color: #2e7d32;
+        }
+        .close-hint {
+            font-size: 0.9em;
+            color: #999;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">✓</div>
+        <h1>계정 연동 완료!</h1>
+        <p>소셜 계정이 기존 계정에 성공적으로 연동되었습니다.</p>
+        <div class="provider-badge">%s</div>
+        <div class="info-box">
+            <p><strong>다음 단계</strong></p>
+            <p>이제 연동된 소셜 계정으로 로그인할 수 있습니다.</p>
+        </div>
+        <p class="close-hint">이 페이지를 닫아도 됩니다.</p>
+    </div>
+</body>
+</html>`, providerDisplay)
+	} else {
+		html = fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>연동 실패</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 50px 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 450px;
+        }
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #e53935 0%%, #ef5350 100%%);
+            border-radius: 50%%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 25px;
+            color: white;
+            font-size: 40px;
+        }
+        h1 {
+            color: #e53935;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+        }
+        p {
+            color: #666;
+            margin-bottom: 25px;
+            line-height: 1.6;
+            font-size: 1.1em;
+        }
+        .error-box {
+            background: linear-gradient(135deg, #ffebee 0%%, #ffcdd2 100%%);
+            border-left: 4px solid #e53935;
+            padding: 15px 20px;
+            text-align: left;
+            border-radius: 8px;
+            margin: 25px 0;
+        }
+        .error-box p {
+            margin: 5px 0;
+            font-size: 0.95em;
+            color: #c62828;
+        }
+        .close-hint {
+            font-size: 0.9em;
+            color: #999;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-icon">✕</div>
+        <h1>연동 실패</h1>
+        <p>소셜 계정 연동에 실패했습니다.</p>
+        <div class="error-box">
+            <p><strong>원인:</strong></p>
+            <p>%s</p>
+        </div>
+        <p>링크가 만료되었거나 이미 사용되었을 수 있습니다.<br>새로운 연동 이메일을 요청해주세요.</p>
+        <p class="close-hint">이 페이지를 닫아도 됩니다.</p>
+    </div>
+</body>
+</html>`, errMsg)
+	}
+
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, html)
 }
 
 // SendSocialLinkEmailRequest 소셜 연동 이메일 발송 요청 구조체
