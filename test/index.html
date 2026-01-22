@@ -1170,35 +1170,44 @@
 
             <p style="color: #555; margin-bottom: 15px;">
                 이 이메일로 가입된 계정이 이미 존재합니다.<br>
-                <strong>소셜 계정을 기존 계정에 연동하시겠습니까?</strong>
+                <strong>인증 방법을 선택해주세요.</strong>
             </p>
 
-            <!-- 이메일 인증 안내 (이메일이 발송된 경우) -->
+            <!-- 인증 방법 선택 영역 (이메일 미발송 상태) -->
+            <div id="verificationOptionsArea">
+                <!-- 이메일 인증 옵션 -->
+                <div class="verification-option" onclick="sendSocialLinkEmail()" id="emailVerificationOption">
+                    <h4><span class="icon">📧</span> 이메일로 인증하기</h4>
+                    <p>인증 이메일을 받아서 링크를 클릭하면 연동됩니다.</p>
+                </div>
+
+                <!-- 비밀번호 인증 옵션 (비밀번호가 있는 경우) -->
+                <div id="passwordOption" style="display: none;">
+                    <div class="or-divider">
+                        <span>또는</span>
+                    </div>
+
+                    <div class="verification-option" onclick="togglePasswordInput()">
+                        <h4><span class="icon">🔑</span> 비밀번호로 바로 인증하기</h4>
+                        <p>기존 계정의 비밀번호를 입력하면 즉시 연동됩니다.</p>
+                    </div>
+
+                    <div class="password-input-area" id="passwordInputArea">
+                        <div class="form-group">
+                            <label>기존 계정 비밀번호</label>
+                            <input type="password" id="linkPassword" placeholder="기존 계정의 비밀번호를 입력하세요">
+                        </div>
+                        <button class="btn-warning" onclick="confirmSocialLinkByPassword()">비밀번호로 연동하기</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 이메일 발송 완료 안내 (이메일 발송 후 표시) -->
             <div class="email-check-notice" id="emailSentNotice" style="display: none;">
                 <div class="icon">📧</div>
                 <h4>인증 이메일이 발송되었습니다!</h4>
                 <p><strong id="emailSentTo">-</strong> 으로 인증 링크를 보내드렸습니다.<br>
                 이메일을 확인하고 링크를 클릭하면 자동으로 연동됩니다.</p>
-            </div>
-
-            <!-- 비밀번호 인증 옵션 (비밀번호가 있는 경우) -->
-            <div id="passwordOption" style="display: none;">
-                <div class="or-divider">
-                    <span>또는</span>
-                </div>
-
-                <div class="verification-option" onclick="togglePasswordInput()">
-                    <h4><span class="icon">🔑</span> 비밀번호로 바로 인증하기</h4>
-                    <p>기존 계정의 비밀번호를 입력하면 즉시 연동됩니다.</p>
-                </div>
-
-                <div class="password-input-area" id="passwordInputArea">
-                    <div class="form-group">
-                        <label>기존 계정 비밀번호</label>
-                        <input type="password" id="linkPassword" placeholder="기존 계정의 비밀번호를 입력하세요">
-                    </div>
-                    <button class="btn-warning" onclick="confirmSocialLinkByPassword()">비밀번호로 연동하기</button>
-                </div>
             </div>
 
             <input type="hidden" id="linkToken" value="">
@@ -1303,6 +1312,35 @@
         </div>
     </div>
 
+    <!-- 외국인 회원가입 이메일 인증 안내 모달 -->
+    <div id="emailVerificationModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('emailVerificationModal')">&times;</span>
+            <div style="text-align: center; padding: 10px 0;">
+                <div style="font-size: 4em; margin-bottom: 15px;">📧</div>
+                <div class="modal-header" style="color: #1976d2;">Verify Your Email</div>
+            </div>
+            <div class="modal-body" style="text-align: center;">
+                <p style="font-size: 1.1em; color: #333; margin-bottom: 20px;">
+                    A verification email has been sent to:<br>
+                    <strong id="verificationEmailAddress" style="color: #667eea;">-</strong>
+                </p>
+                <div style="background: #e3f2fd; border-radius: 12px; padding: 20px; margin: 15px 0; text-align: left;">
+                    <p style="color: #1565c0; margin: 0 0 10px 0; font-weight: 600;">📌 Next Steps:</p>
+                    <ol style="color: #555; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li>Check your inbox (and spam folder)</li>
+                        <li>Click the verification link in the email</li>
+                        <li>Come back and log in</li>
+                    </ol>
+                </div>
+                <p style="color: #888; font-size: 0.9em; margin-top: 15px;">
+                    The verification link will expire in 24 hours.
+                </p>
+            </div>
+            <button class="modal-confirm-btn" onclick="closeModal('emailVerificationModal')">Got it!</button>
+        </div>
+    </div>
+
     <!-- 회원 탈퇴 확인 모달 -->
     <div id="deleteAccountModal" class="modal">
         <div class="modal-content">
@@ -1347,6 +1385,14 @@
             if (modalId === 'linkModal') {
                 document.getElementById('passwordInputArea').classList.remove('active');
                 document.getElementById('linkPassword').value = '';
+                // 이메일 인증 버튼 상태 복구
+                const emailOption = document.getElementById('emailVerificationOption');
+                emailOption.style.pointerEvents = 'auto';
+                emailOption.style.opacity = '1';
+                emailOption.innerHTML = '<h4><span class="icon">📧</span> 이메일로 인증하기</h4><p>인증 이메일을 받아서 링크를 클릭하면 연동됩니다.</p>';
+                // 옵션 영역 표시, 발송 완료 안내 숨김
+                document.getElementById('verificationOptionsArea').style.display = 'block';
+                document.getElementById('emailSentNotice').style.display = 'none';
             }
             if (modalId === 'unlinkModal') {
                 document.getElementById('newPasswordForConvert').value = '';
@@ -1364,7 +1410,7 @@
 
         // 모달 바깥 영역 클릭 시 닫기
         window.onclick = function (event) {
-            const modals = ['errorModal', 'linkModal', 'successModal', 'socialLoginSuccessModal', 'unlinkModal', 'deleteAccountModal'];
+            const modals = ['errorModal', 'linkModal', 'successModal', 'socialLoginSuccessModal', 'unlinkModal', 'deleteAccountModal', 'emailVerificationModal'];
             modals.forEach(modalId => {
                 const modal = document.getElementById(modalId);
                 if (event.target == modal) {
@@ -1402,7 +1448,6 @@
                     linkToken: data.link_token,
                     email: data.email,
                     provider: data.provider,
-                    emailSent: data.email_sent,
                     hasPassword: data.has_password
                 };
                 showLinkModal(data);
@@ -1425,14 +1470,10 @@
             document.getElementById('linkModalProvider').textContent = data.provider.toUpperCase();
             document.getElementById('linkToken').value = data.link_token;
 
-            // 이메일 발송 안내
-            const emailNotice = document.getElementById('emailSentNotice');
-            if (data.email_sent) {
-                document.getElementById('emailSentTo').textContent = data.email;
-                emailNotice.style.display = 'block';
-            } else {
-                emailNotice.style.display = 'none';
-            }
+            // 초기 상태: 옵션 선택 영역 표시, 이메일 발송 안내 숨김
+            document.getElementById('verificationOptionsArea').style.display = 'block';
+            document.getElementById('emailSentNotice').style.display = 'none';
+            document.getElementById('emailSentTo').textContent = data.email;
 
             // 비밀번호 옵션 (비밀번호가 있는 경우에만 표시)
             const passwordOption = document.getElementById('passwordOption');
@@ -1443,6 +1484,50 @@
             }
 
             document.getElementById('linkModal').style.display = 'block';
+        }
+
+        // 소셜 연동 이메일 발송 요청
+        async function sendSocialLinkEmail() {
+            const linkToken = document.getElementById('linkToken').value;
+
+            if (!linkToken) {
+                showErrorModal(0, '연동 토큰이 없습니다. 다시 시도해주세요.');
+                return;
+            }
+
+            // 버튼 비활성화 (중복 클릭 방지)
+            const emailOption = document.getElementById('emailVerificationOption');
+            emailOption.style.pointerEvents = 'none';
+            emailOption.style.opacity = '0.6';
+            emailOption.innerHTML = '<h4><span class="icon">⏳</span> 이메일 발송 중...</h4><p>잠시만 기다려주세요.</p>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/auth/send-social-link-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ link_token: linkToken })
+                });
+                const data = await response.json();
+                displayResponse(response.status, data);
+
+                if (response.ok) {
+                    // 이메일 발송 성공: 옵션 영역 숨기고 발송 완료 안내 표시
+                    document.getElementById('verificationOptionsArea').style.display = 'none';
+                    document.getElementById('emailSentNotice').style.display = 'block';
+                    showToast('인증 이메일이 발송되었습니다!', 'success');
+                } else {
+                    // 실패 시 버튼 복구
+                    emailOption.style.pointerEvents = 'auto';
+                    emailOption.style.opacity = '1';
+                    emailOption.innerHTML = '<h4><span class="icon">📧</span> 이메일로 인증하기</h4><p>인증 이메일을 받아서 링크를 클릭하면 연동됩니다.</p>';
+                }
+            } catch (error) {
+                displayResponse(0, { error: error.message });
+                // 실패 시 버튼 복구
+                emailOption.style.pointerEvents = 'auto';
+                emailOption.style.opacity = '1';
+                emailOption.innerHTML = '<h4><span class="icon">📧</span> 이메일로 인증하기</h4><p>인증 이메일을 받아서 링크를 클릭하면 연동됩니다.</p>';
+            }
         }
 
         // 비밀번호 입력창 토글
@@ -1533,7 +1618,6 @@
                         linkToken: data.link_token,
                         email: data.email,
                         provider: data.provider,
-                        emailSent: data.email_sent,
                         hasPassword: data.has_password
                     };
                     showLinkModal(data);
@@ -1644,7 +1728,14 @@
                 displayResponse(response.status, data);
 
                 if (response.ok) {
-                    showToast('회원가입이 완료되었습니다!', 'success');
+                    if (userType === 'FOREIGNER') {
+                        // 외국인: 이메일 인증 안내 모달 표시
+                        document.getElementById('verificationEmailAddress').textContent = email;
+                        document.getElementById('emailVerificationModal').style.display = 'block';
+                    } else {
+                        // 한국인: 바로 로그인 가능
+                        showToast('회원가입이 완료되었습니다! 바로 로그인할 수 있습니다.', 'success');
+                    }
                 }
             } catch (error) {
                 displayResponse(0, { error: error.message });
@@ -2135,7 +2226,6 @@
                     linkToken: data.link_token,
                     email: data.email,
                     provider: data.provider,
-                    emailSent: data.email_sent,
                     hasPassword: data.has_password
                 };
                 // 응답 영역에 표시 (개발자 도구 대용)
